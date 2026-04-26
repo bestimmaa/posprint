@@ -23,3 +23,28 @@ test("readme documents global install and posprint usage", () => {
   assert.equal(readme.includes("tm88v-print"), false);
   assert.equal(readme.includes("@chris/tm88v-print-cli"), false);
 });
+
+test("package scripts route print:test through print-cli markdown fixture", () => {
+  assert.equal(
+    pkg.scripts["print:test"],
+    "node src/print-cli.js --markdown-file=tests/fixtures/markdown-showcase.md"
+  );
+  assert.equal(
+    pkg.scripts["print:test:dry"],
+    "node src/print-cli.js --markdown-file=tests/fixtures/markdown-showcase.md --dry-run"
+  );
+  assert.equal(Object.hasOwn(pkg.scripts, "print:test:save"), false);
+});
+
+test("readme does not document removed print:test:save command", () => {
+  assert.equal(readme.includes("print:test:save"), false);
+});
+
+test("markdown showcase fixture exists in tests fixtures", () => {
+  const fixturePath = path.resolve(
+    __dirname,
+    "fixtures",
+    "markdown-showcase.md"
+  );
+  assert.doesNotThrow(() => readFileSync(fixturePath, "utf8"));
+});

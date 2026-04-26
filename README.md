@@ -24,16 +24,16 @@ Show CLI help:
 posprint --help
 ```
 
-Dry run from a markdown receipt file (build payload and select printer, no print job):
+Dry run from the test fixture (build payload and select printer, no print job):
 
 ```bash
-posprint --dry-run --markdown-file="TEST_RECEIPT.md"
+posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md"
 ```
 
 Send a real print job to a specific Windows queue:
 
 ```bash
-posprint --markdown-file="TEST_RECEIPT.md" --printer="EPSON TM-T88V Receipt (USB)"
+posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
 ## CLI Usage
@@ -88,7 +88,7 @@ Use environment override for printer selection:
 
 ```powershell
 $env:ESC_POS_PRINTER="EPSON TM-T88V Receipt (USB)"
-posprint --markdown-file="TEST_RECEIPT.md"
+posprint --markdown-file="tests/fixtures/markdown-showcase.md"
 ```
 
 ## Development
@@ -107,9 +107,8 @@ npm test
 
 Project scripts for ESC/POS and spooler verification:
 
-- `npm run print:test:dry` for printer discovery and dry-run validation.
-- `npm run print:test` for sending the test receipt payload.
-- `npm run print:test:save` for writing ESC/POS output to `tmp/escpos-demo.bin`.
+- `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` and `--dry-run`.
+- `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` to submit a RAW print job.
 
 ## Windows Requirements
 
