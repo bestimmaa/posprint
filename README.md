@@ -102,6 +102,34 @@ Implications:
 - If your printer workflow relies on a different locale/code page for accented characters or non-ASCII scripts, those characters may render differently under this fixed profile.
 - This project currently prioritizes stable ASCII-compatible receipt symbols for markdown fixtures and tests.
 
+### Markdown Best Practices for Thermal Receipts
+
+- Keep line width realistic: start with `--chars-per-line=42` for TM-T88V 80mm paper and adjust only after dry-run checks.
+- Prefer ASCII-friendly content for operational receipts: use symbols like `[ ]`, `[x]`, `|`, and `-` consistently.
+- Use hierarchy sparingly: one `#` title and `##` section headers are usually enough on receipt paper.
+- Keep lists short and shallow: nested lists are supported, but one nesting level is usually easiest to read when printed.
+- Write short paragraphs: convert long prose into bullets when possible to avoid hard-to-scan wraps.
+- Use code blocks only for fixed-width snippets (IDs, shift metadata, diagnostics), and keep them compact.
+- Always dry-run before real print:
+
+```bash
+npm run print:dry -- --markdown-file="path/to/file.md" --chars-per-line=42
+```
+
+- Then print to the exact USB queue:
+
+```bash
+npm run print -- --markdown-file="path/to/file.md" --printer="EPSON TM-T88V Receipt (USB)"
+```
+
+- Use strict mode while authoring templates to catch unsupported syntax early:
+
+```bash
+npm run print:dry -- --markdown-file="path/to/file.md" --strict-markdown
+```
+
+- See `tests/fixtures/markdown-showcase.md` for a reference layout that exercises supported features and prints cleanly.
+
 Selection behavior:
 
 1. `--printer` flag (if provided)
