@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { readFileSync } = require("fs");
+const { existsSync, readFileSync } = require("fs");
 const pkg = require("../package.json");
 const readmePath = path.resolve(__dirname, "..", "README.md");
 const readme = readFileSync(readmePath, "utf8");
@@ -56,4 +56,24 @@ test("package main points to module entrypoint", () => {
 test("readme documents CommonJS and ESM module usage", () => {
   assert.equal(readme.includes("const { markdownToEscpos"), true);
   assert.equal(readme.includes("import posprint from \"posprint\""), true);
+});
+
+test("bitbucket pipeline config exists and defines required build keys", () => {
+  const pipelinePath = path.resolve(__dirname, "..", "bitbucket-pipelines.yml");
+
+  assert.equal(existsSync(pipelinePath), true);
+
+  const pipeline = readFileSync(pipelinePath, "utf8");
+  assert.match(pipeline, /\bimage\s*:/);
+  assert.match(pipeline, /\bpipelines\s*:/);
+  assert.match(pipeline, /\bdefault\s*:/);
+  assert.match(pipeline, /\bstep\s*:/);
+  assert.match(pipeline, /\bscript\s*:/);
+  assert.match(pipeline, /\bartifacts\s*:/);
+});
+
+test("readme documents bitbucket pipeline and build artifacts", () => {
+  assert.equal(readme.includes("bitbucket-pipelines.yml"), true);
+  assert.match(readme, /bitbucket pipeline/i);
+  assert.match(readme, /artifacts?/i);
 });
