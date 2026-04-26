@@ -1,0 +1,5 @@
+drivers_and_manuals/
+node_modules/
+*.log
+tmp/
+.worktrees/

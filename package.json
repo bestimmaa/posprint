@@ -1,0 +1,21 @@
+{
+  "name": "epson-playground",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TM-T88V ESC/POS over Windows RAW spooler",
+  "main": "src/print-cli.js",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "print": "node src/print-cli.js",
+    "print:dry": "node src/print-cli.js --dry-run",
+    "print:test": "node src/print-test.js",
+    "print:test:dry": "node src/print-test.js --dry-run",
+    "print:test:save": "node src/print-test.js --save"
+  },
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
