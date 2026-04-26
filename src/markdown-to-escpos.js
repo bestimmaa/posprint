@@ -1,7 +1,7 @@
 "use strict";
 
 const MarkdownIt = require("markdown-it");
-const { concat, init, align, bold, size, line, feed, cut } = require("./escpos-builder");
+const { concat, init, align, bold, size, line, text, feed, cut } = require("./escpos-builder");
 
 function wrapText(text, width) {
   const value = String(text || "").trim();
@@ -68,18 +68,73 @@ function renderLink(label, href) {
   return `${cleanLabel} (${cleanHref})`;
 }
 
-function inlineToText(children, strictMarkdown = false) {
-  if (!Array.isArray(children) || !children.length) {
-    return "";
+function collectInlineRange(children, startIndex, openType, closeType) {
+  let depth = 1;
+  let end = startIndex + 1;
+
+  while (end < children.length && depth > 0) {
+    if (children[end].type === openType) {
+      depth += 1;
+    } else if (children[end].type === closeType) {
+      depth -= 1;
+    }
+
+    if (depth > 0) {
+      end += 1;
+    }
   }
 
-  let out = "";
+  return {
+    inner: children.slice(startIndex + 1, end),
+    endIndex: end
+  };
+}
+
+function normalizeSegments(segments) {
+  const out = [];
+
+  for (const segment of segments) {
+    if (!segment || !segment.text) {
+      continue;
+    }
+
+    const value = String(segment.text);
+    if (!value) {
+      continue;
+    }
+
+    const boldEnabled = Boolean(segment.bold);
+    const prev = out[out.length - 1];
+
+    if (prev && prev.bold === boldEnabled) {
+      prev.text += value;
+      continue;
+    }
+
+    out.push({ text: value, bold: boldEnabled });
+  }
+
+  return out;
+}
+
+function segmentsToText(segments) {
+  return normalizeSegments(segments)
+    .map((segment) => segment.text)
+    .join("");
+}
+
+function inlineToSegments(children, strictMarkdown = false, boldEnabled = false) {
+  if (!Array.isArray(children) || !children.length) {
+    return [];
+  }
+
+  const out = [];
 
   for (let i = 0; i < children.length; i += 1) {
     const token = children[i];
 
     if (token.type === "text" || token.type === "code_inline") {
-      out += token.content;
+      out.push({ text: token.content, bold: boldEnabled });
       continue;
     }
 
@@ -87,36 +142,229 @@ function inlineToText(children, strictMarkdown = false) {
       if (strictMarkdown) {
         throw new Error(`Unsupported markdown construct: ${token.type}`);
       }
-      out += token.content;
+      out.push({ text: token.content, bold: boldEnabled });
       continue;
     }
 
     if (token.type === "softbreak" || token.type === "hardbreak") {
-      out += "\n";
+      out.push({ text: "\n", bold: boldEnabled });
+      continue;
+    }
+
+    if (token.type === "strong_open") {
+      const range = collectInlineRange(children, i, "strong_open", "strong_close");
+      out.push(...inlineToSegments(range.inner, strictMarkdown, true));
+      i = range.endIndex;
+      continue;
+    }
+
+    if (token.type === "em_open") {
+      const range = collectInlineRange(children, i, "em_open", "em_close");
+      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled));
+      i = range.endIndex;
+      continue;
+    }
+
+    if (token.type === "s_open") {
+      const range = collectInlineRange(children, i, "s_open", "s_close");
+      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled));
+      i = range.endIndex;
       continue;
     }
 
     if (token.type === "link_open") {
-      let depth = 1;
-      let end = i + 1;
-      while (end < children.length && depth > 0) {
-        if (children[end].type === "link_open") {
-          depth += 1;
-        } else if (children[end].type === "link_close") {
-          depth -= 1;
-        }
-        if (depth > 0) {
-          end += 1;
-        }
-      }
-
-      const label = inlineToText(children.slice(i + 1, end), strictMarkdown);
-      out += renderLink(label, token.attrGet("href"));
-      i = end;
+      const range = collectInlineRange(children, i, "link_open", "link_close");
+      const label = segmentsToText(inlineToSegments(range.inner, strictMarkdown, false));
+      out.push({ text: renderLink(label, token.attrGet("href")), bold: boldEnabled });
+      i = range.endIndex;
     }
   }
 
-  return out;
+  return normalizeSegments(out);
+}
+
+function inlineToText(children, strictMarkdown = false) {
+  return segmentsToText(inlineToSegments(children, strictMarkdown));
+}
+
+function splitSegmentsByBreaks(segments) {
+  const rows = [[]];
+
+  for (const segment of normalizeSegments(segments)) {
+    const parts = segment.text.split("\n");
+
+    for (let i = 0; i < parts.length; i += 1) {
+      if (parts[i]) {
+        rows[rows.length - 1].push({ text: parts[i], bold: segment.bold });
+      }
+
+      if (i < parts.length - 1) {
+        rows.push([]);
+      }
+    }
+  }
+
+  return rows.map((row) => normalizeSegments(row));
+}
+
+function splitSegmentsByWidth(segments, width) {
+  const safeWidth = Number.isInteger(width) && width > 0 ? width : 42;
+  const lines = [];
+  let current = [];
+  let currentWidth = 0;
+  let pendingSpaces = [];
+  let pendingSpaceWidth = 0;
+
+  function appendSegment(target, value, enabledBold) {
+    if (!value) {
+      return;
+    }
+
+    const boldValue = Boolean(enabledBold);
+    const prev = target[target.length - 1];
+    if (prev && prev.bold === boldValue) {
+      prev.text += value;
+      return;
+    }
+
+    target.push({ text: value, bold: boldValue });
+  }
+
+  function pushPendingSpaces() {
+    for (const part of pendingSpaces) {
+      appendSegment(current, part.text, part.bold);
+    }
+    currentWidth += pendingSpaceWidth;
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
+  }
+
+  function pushCurrent() {
+    lines.push(normalizeSegments(current));
+    current = [];
+    currentWidth = 0;
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
+  }
+
+  function appendTokenWithWrapping(token) {
+    for (const part of token.parts) {
+      let start = 0;
+
+      while (start < part.text.length) {
+        if (currentWidth === safeWidth) {
+          pushCurrent();
+        }
+
+        const room = safeWidth - currentWidth;
+        const take = Math.min(room, part.text.length - start);
+        appendSegment(current, part.text.slice(start, start + take), part.bold);
+        currentWidth += take;
+        start += take;
+      }
+    }
+  }
+
+  const tokens = [];
+
+  for (const segment of normalizeSegments(segments)) {
+    for (const ch of segment.text) {
+      const isSpace = /\s/.test(ch);
+      const prevToken = tokens[tokens.length - 1];
+
+      if (!prevToken || prevToken.isSpace !== isSpace) {
+        tokens.push({ isSpace, length: 0, parts: [] });
+      }
+
+      const token = tokens[tokens.length - 1];
+      const prevPart = token.parts[token.parts.length - 1];
+      if (prevPart && prevPart.bold === Boolean(segment.bold)) {
+        prevPart.text += ch;
+      } else {
+        token.parts.push({ text: ch, bold: Boolean(segment.bold) });
+      }
+      token.length += 1;
+    }
+  }
+
+  for (const token of tokens) {
+    if (token.isSpace) {
+      if (currentWidth === 0) {
+        continue;
+      }
+      pendingSpaces = normalizeSegments([...pendingSpaces, ...token.parts]);
+      pendingSpaceWidth += token.length;
+      continue;
+    }
+
+    if (currentWidth > 0 && currentWidth + pendingSpaceWidth + token.length <= safeWidth) {
+      pushPendingSpaces();
+      appendTokenWithWrapping(token);
+      continue;
+    }
+
+    if (currentWidth > 0 && currentWidth + pendingSpaceWidth + token.length > safeWidth) {
+      pushCurrent();
+    }
+
+    appendTokenWithWrapping(token);
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
+  }
+
+  if (pendingSpaceWidth > 0 && currentWidth > 0 && currentWidth + pendingSpaceWidth <= safeWidth) {
+    pushPendingSpaces();
+  }
+
+  if (pendingSpaceWidth > 0 && currentWidth > 0 && currentWidth + pendingSpaceWidth > safeWidth) {
+    pushCurrent();
+  }
+
+  if (current.length || lines.length === 0) {
+    lines.push(normalizeSegments(current));
+  }
+
+  return lines;
+}
+
+function renderStyledLine(lineSegments, chunks, prefix = "") {
+  const parts = [];
+  let activeBold = false;
+
+  if (prefix) {
+    parts.push(text(prefix));
+  }
+
+  for (const segment of normalizeSegments(lineSegments)) {
+    const segmentBold = Boolean(segment.bold);
+    if (segmentBold !== activeBold) {
+      parts.push(bold(segmentBold));
+      activeBold = segmentBold;
+    }
+
+    parts.push(text(segment.text));
+  }
+
+  if (activeBold) {
+    parts.push(bold(false));
+  }
+
+  parts.push(text("\n"));
+  chunks.push(concat(parts));
+}
+
+function renderWrappedSegments(segments, chunks, charsPerLine, prefix = "") {
+  const safePrefix = String(prefix || "");
+  const rowWidth = Math.max(1, charsPerLine - safePrefix.length);
+  const rows = splitSegmentsByBreaks(segments);
+
+  for (const row of rows) {
+    const wrapped = splitSegmentsByWidth(row, rowWidth);
+
+    for (const wrappedLine of wrapped) {
+      renderStyledLine(wrappedLine, chunks, safePrefix);
+    }
+  }
 }
 
 function renderHeading(level, text, chunks, charsPerLine) {
@@ -143,6 +391,19 @@ function renderParagraph(text, chunks, charsPerLine) {
   chunks.push(line(""));
 }
 
+function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, prefix = "") {
+  const segments = inlineToSegments(children, strictMarkdown);
+  renderWrappedSegments(segments, chunks, charsPerLine, prefix);
+  chunks.push(line(""));
+}
+
+function normalizeTaskMarkersInSegments(segments) {
+  return normalizeSegments(segments).map((segment) => ({
+    text: segment.text.replace(/\[X\]/g, "[x]"),
+    bold: segment.bold
+  }));
+}
+
 function renderListItem(text, chunks, charsPerLine, marker) {
   const lines = wrapText(`${marker} ${String(text || "").trim()}`, charsPerLine);
   for (const value of lines) {
@@ -162,31 +423,6 @@ function renderCodeBlock(text, chunks, charsPerLine) {
   chunks.push(line(""));
 }
 
-function extractListItemText(tokens, startIndex, strictMarkdown) {
-  let depth = 1;
-  let text = "";
-
-  for (let cursor = startIndex + 1; cursor < tokens.length && depth > 0; cursor += 1) {
-    const token = tokens[cursor];
-
-    if (token.type === "list_item_open") {
-      depth += 1;
-      continue;
-    }
-
-    if (token.type === "list_item_close") {
-      depth -= 1;
-      continue;
-    }
-
-    if (depth === 1 && token.type === "inline" && !text) {
-      text = inlineToText(token.children, strictMarkdown);
-    }
-  }
-
-  return text;
-}
-
 function markdownToEscpos(markdown, options = {}) {
   const charsPerLine = Number.isInteger(options.charsPerLine) ? options.charsPerLine : 42;
   const strictMarkdown = Boolean(options.strictMarkdown);
@@ -195,7 +431,9 @@ function markdownToEscpos(markdown, options = {}) {
   const chunks = [init()];
 
   const listStack = [];
+  const listItemStack = [];
   let listItemDepth = 0;
+  let blockquoteDepth = 0;
 
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
@@ -210,24 +448,63 @@ function markdownToEscpos(markdown, options = {}) {
     }
 
     if (token.type === "paragraph_open") {
+      const inline = tokens[i + 1];
+      const children = inline && inline.type === "inline" ? inline.children : [];
+      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+
       if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        let segments = inlineToSegments(children, strictMarkdown);
+
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          segments = normalizeTaskMarkersInSegments(segments);
+          segments = [{ text: `${currentListItem.marker} `, bold: false }, ...segments];
+          currentListItem.hasRenderedContent = true;
+        }
+
+        renderWrappedSegments(segments, chunks, charsPerLine, quotePrefix);
+        chunks.push(line(""));
         i += 2;
         continue;
       }
 
-      const inline = tokens[i + 1];
-      const text = inline && inline.type === "inline" ? inlineToText(inline.children, strictMarkdown) : "";
-      renderParagraph(text, chunks, charsPerLine);
+      renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, quotePrefix);
       i += 2;
       continue;
     }
 
+    if (token.type === "blockquote_open") {
+      blockquoteDepth += 1;
+      continue;
+    }
+
+    if (token.type === "blockquote_close") {
+      blockquoteDepth = Math.max(0, blockquoteDepth - 1);
+      continue;
+    }
+
     if (token.type === "bullet_list_open") {
+      if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          currentListItem.hasRenderedContent = true;
+        }
+      }
       listStack.push({ ordered: false, index: 0 });
       continue;
     }
 
     if (token.type === "ordered_list_open") {
+      if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          currentListItem.hasRenderedContent = true;
+        }
+      }
       listStack.push({ ordered: true, index: Number(token.attrGet("start") || 1) });
       continue;
     }
@@ -240,20 +517,19 @@ function markdownToEscpos(markdown, options = {}) {
 
     if (token.type === "list_item_open") {
       listItemDepth += 1;
-      const text = extractListItemText(tokens, i, strictMarkdown);
-
       const current = listStack[listStack.length - 1] || { ordered: false, index: 0 };
       const marker = current.ordered ? `${current.index}.` : "-";
       if (current.ordered) {
         current.index += 1;
       }
 
-      renderListItem(text, chunks, charsPerLine, marker);
+      listItemStack.push({ marker, hasRenderedContent: false });
       continue;
     }
 
     if (token.type === "list_item_close") {
       listItemDepth = Math.max(0, listItemDepth - 1);
+      listItemStack.pop();
       continue;
     }
 
