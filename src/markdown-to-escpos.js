@@ -484,11 +484,27 @@ function markdownToEscpos(markdown, options = {}) {
     }
 
     if (token.type === "bullet_list_open") {
+      if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          currentListItem.hasRenderedContent = true;
+        }
+      }
       listStack.push({ ordered: false, index: 0 });
       continue;
     }
 
     if (token.type === "ordered_list_open") {
+      if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          currentListItem.hasRenderedContent = true;
+        }
+      }
       listStack.push({ ordered: true, index: Number(token.attrGet("start") || 1) });
       continue;
     }

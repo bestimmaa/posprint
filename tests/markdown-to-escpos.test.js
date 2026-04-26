@@ -57,6 +57,14 @@ test("renders nested list parent and child markers", () => {
   assert.equal(text.includes("- child"), true);
 });
 
+test("preserves marker for empty parent list item with nested child", () => {
+  const out = Buffer.from(markdownToEscpos("-\n  - child\n", { charsPerLine: 42, strictMarkdown: false }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("- \n"), true);
+  assert.equal(text.includes("- child"), true);
+});
+
 test("ordered list items are not duplicated", () => {
   const out = Buffer.from(markdownToEscpos("1. Espresso\n2. Croissant\n3. Filter Coffee\n", {
     charsPerLine: 42,
