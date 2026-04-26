@@ -15,6 +15,26 @@ npm install
 
 Dependencies are installed via `npm install` (including `markdown-it` for markdown rendering).
 
+## Global CLI Install
+
+Install globally:
+
+```bash
+npm i -g @chris/tm88v-print-cli
+```
+
+Show help:
+
+```bash
+tm88v-print --help
+```
+
+Dry run from markdown file:
+
+```bash
+tm88v-print --dry-run --markdown-file="TEST_RECEIPT.md"
+```
+
 ## Run
 
 Dry-run (list printers and selected target only):
