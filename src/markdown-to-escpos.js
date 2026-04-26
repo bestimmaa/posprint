@@ -12,8 +12,10 @@ const {
   line,
   text,
   feed,
-  cut
+  cut,
+  rasterImage
 } = require("./escpos-builder");
+const { imageTokenToRaster } = require("./image-to-escpos");
 
 function wrapText(text, width) {
   const value = String(text || "").trim();
@@ -412,6 +414,42 @@ function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, p
   chunks.push(line(""));
 }
 
+function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, prefix = "") {
+  const buffered = [];
+
+  function flushBuffered() {
+    if (!buffered.length) {
+      return;
+    }
+    const segments = inlineToSegments(buffered, strictMarkdown);
+    renderWrappedSegments(segments, chunks, charsPerLine, prefix);
+    buffered.length = 0;
+  }
+
+  for (const token of children || []) {
+    if (token.type !== "image") {
+      buffered.push(token);
+      continue;
+    }
+
+    flushBuffered();
+
+    const src = token.attrGet("src");
+    const raster = imageTokenToRaster({ src, charsPerLine, threshold: 128 });
+
+    chunks.push(align("center"));
+    chunks.push(rasterImage(raster));
+    chunks.push(text("\n"));
+    chunks.push(align("left"));
+  }
+
+  flushBuffered();
+}
+
+function childrenContainImage(children) {
+  return Array.isArray(children) && children.some((token) => token.type === "image");
+}
+
 function normalizeTaskMarkersInSegments(segments) {
   return normalizeSegments(segments).map((segment) => ({
     text: segment.text.replace(/\[X\]/g, "[x]"),
@@ -473,6 +511,21 @@ function markdownToEscpos(markdown, options = {}) {
 
       if (listItemDepth > 0) {
         const currentListItem = listItemStack[listItemStack.length - 1];
+        const hasImage = childrenContainImage(children);
+
+        if (hasImage) {
+          if (currentListItem && !currentListItem.hasRenderedContent) {
+            const indent = getListIndent(listItemDepth);
+            chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
+            currentListItem.hasRenderedContent = true;
+          }
+
+          renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, `${quotePrefix}${getListIndent(listItemDepth)}  `);
+          chunks.push(line(""));
+          i += 2;
+          continue;
+        }
+
         let segments = inlineToSegments(children, strictMarkdown);
 
         if (currentListItem && !currentListItem.hasRenderedContent) {
@@ -488,7 +541,8 @@ function markdownToEscpos(markdown, options = {}) {
         continue;
       }
 
-      renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, quotePrefix);
+      renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, quotePrefix);
+      chunks.push(line(""));
       i += 2;
       continue;
     }

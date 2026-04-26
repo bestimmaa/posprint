@@ -35,7 +35,9 @@
     "prepublishOnly": "npm test"
   },
   "dependencies": {
-    "markdown-it": "^14.1.0"
+    "jpeg-js": "^0.4.4",
+    "markdown-it": "^14.1.0",
+    "pngjs": "^7.0.0"
   },
   "engines": {
     "node": ">=20"

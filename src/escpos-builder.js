@@ -73,6 +73,31 @@ function pulseDrawer(pin = 0, onTime = 80, offTime = 160) {
   return byte(0x1b, 0x70, m, t1, t2);
 }
 
+function rasterImage({ width, height, data }) {
+  if (!Number.isInteger(width) || width <= 0) {
+    throw new Error("Invalid raster width");
+  }
+
+  if (!Number.isInteger(height) || height <= 0) {
+    throw new Error("Invalid raster height");
+  }
+
+  const bytesPerRow = Math.ceil(width / 8);
+  const expectedLength = bytesPerRow * height;
+  const payload = data instanceof Uint8Array ? data : Uint8Array.from(data || []);
+
+  if (payload.length !== expectedLength) {
+    throw new Error("Invalid raster payload length");
+  }
+
+  const xL = bytesPerRow & 0xff;
+  const xH = (bytesPerRow >> 8) & 0xff;
+  const yL = height & 0xff;
+  const yH = (height >> 8) & 0xff;
+
+  return concat([byte(0x1d, 0x76, 0x30, 0x00, xL, xH, yL, yH), payload]);
+}
+
 function demoReceipt() {
   return concat([
     init(),
@@ -113,5 +138,6 @@ module.exports = {
   feed,
   cut,
   pulseDrawer,
+  rasterImage,
   demoReceipt
 };

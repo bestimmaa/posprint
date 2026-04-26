@@ -51,6 +51,21 @@ Flags:
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.
 
+## Markdown Images
+
+`posprint` supports standard markdown image syntax:
+
+```md
+![Logo](relative/or/absolute/path.png)
+```
+
+- Supported formats: `.png`, `.jpg`, `.jpeg`
+- Relative paths are resolved from the current working directory.
+- Images are converted automatically to monochrome ESC/POS raster output.
+- Images wider than paper are scaled down to fit.
+- Images smaller than paper keep natural size and are centered.
+- Missing/invalid/unsupported images fail the command with an error.
+
 Printer selection order:
 
 1. `--printer`
