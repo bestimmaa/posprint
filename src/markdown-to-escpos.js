@@ -397,6 +397,13 @@ function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, p
   chunks.push(line(""));
 }
 
+function normalizeTaskMarkersInSegments(segments) {
+  return normalizeSegments(segments).map((segment) => ({
+    text: segment.text.replace(/\[X\]/g, "[x]"),
+    bold: segment.bold
+  }));
+}
+
 function renderListItem(text, chunks, charsPerLine, marker) {
   const lines = wrapText(`${marker} ${String(text || "").trim()}`, charsPerLine);
   for (const value of lines) {
@@ -416,31 +423,6 @@ function renderCodeBlock(text, chunks, charsPerLine) {
   chunks.push(line(""));
 }
 
-function extractListItemText(tokens, startIndex, strictMarkdown) {
-  let depth = 1;
-  let text = "";
-
-  for (let cursor = startIndex + 1; cursor < tokens.length && depth > 0; cursor += 1) {
-    const token = tokens[cursor];
-
-    if (token.type === "list_item_open") {
-      depth += 1;
-      continue;
-    }
-
-    if (token.type === "list_item_close") {
-      depth -= 1;
-      continue;
-    }
-
-    if (depth === 1 && token.type === "inline" && !text) {
-      text = inlineToText(token.children, strictMarkdown);
-    }
-  }
-
-  return text;
-}
-
 function markdownToEscpos(markdown, options = {}) {
   const charsPerLine = Number.isInteger(options.charsPerLine) ? options.charsPerLine : 42;
   const strictMarkdown = Boolean(options.strictMarkdown);
@@ -449,6 +431,7 @@ function markdownToEscpos(markdown, options = {}) {
   const chunks = [init()];
 
   const listStack = [];
+  const listItemStack = [];
   let listItemDepth = 0;
   let blockquoteDepth = 0;
 
@@ -465,14 +448,26 @@ function markdownToEscpos(markdown, options = {}) {
     }
 
     if (token.type === "paragraph_open") {
+      const inline = tokens[i + 1];
+      const children = inline && inline.type === "inline" ? inline.children : [];
+      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+
       if (listItemDepth > 0) {
+        const currentListItem = listItemStack[listItemStack.length - 1];
+        let segments = inlineToSegments(children, strictMarkdown);
+
+        if (currentListItem && !currentListItem.hasRenderedContent) {
+          segments = normalizeTaskMarkersInSegments(segments);
+          segments = [{ text: `${currentListItem.marker} `, bold: false }, ...segments];
+          currentListItem.hasRenderedContent = true;
+        }
+
+        renderWrappedSegments(segments, chunks, charsPerLine, quotePrefix);
+        chunks.push(line(""));
         i += 2;
         continue;
       }
 
-      const inline = tokens[i + 1];
-      const children = inline && inline.type === "inline" ? inline.children : [];
-      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
       renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, quotePrefix);
       i += 2;
       continue;
@@ -506,20 +501,19 @@ function markdownToEscpos(markdown, options = {}) {
 
     if (token.type === "list_item_open") {
       listItemDepth += 1;
-      const text = extractListItemText(tokens, i, strictMarkdown);
-
       const current = listStack[listStack.length - 1] || { ordered: false, index: 0 };
       const marker = current.ordered ? `${current.index}.` : "-";
       if (current.ordered) {
         current.index += 1;
       }
 
-      renderListItem(text, chunks, charsPerLine, marker);
+      listItemStack.push({ marker, hasRenderedContent: false });
       continue;
     }
 
     if (token.type === "list_item_close") {
       listItemDepth = Math.max(0, listItemDepth - 1);
+      listItemStack.pop();
       continue;
     }
 
