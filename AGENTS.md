@@ -14,6 +14,7 @@ This repository builds a usable Node.js module + CLI for markdown-based receipt 
 
 ## Current Architecture
 - Runtime: Node.js 20+ on Windows.
+- Module entrypoint: `src/index.js`.
 - CLI entrypoint: `src/print-cli.js` (published as `posprint`).
 - Markdown conversion pipeline: `src/markdown-to-escpos.js` + `src/escpos-builder.js`.
 - Windows RAW print bridge: `src/windows-raw-printer.js`.
@@ -25,7 +26,7 @@ This repository builds a usable Node.js module + CLI for markdown-based receipt 
 - Prefer plain text or Markdown snapshots for quick diffing and review.
 - Include source URL and capture date in stored references.
 - Original software and drivers are stored in `./drivers_and_manuals`.
-- After any behavior, script, interface, or workflow change, verify `README.md` and update it in the same change when needed.
+- After module or CLI behavior, API, script, or workflow changes, verify README.md and keep module and CLI docs aligned in the same change.
 
 ## Quick Commands
 - Install: `npm install`

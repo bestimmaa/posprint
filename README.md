@@ -1,6 +1,6 @@
 # posprint
 
-`posprint` is a Node.js CLI for sending ESC/POS receipts to Epson TM-T88V printers through the Windows RAW spooler, with markdown-to-receipt support for repeatable print flows.
+`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V through the Windows RAW spooler, with practical workflows for conversion-only and real print jobs.
 
 ## Install
 
@@ -34,6 +34,58 @@ Send a real print job to a specific Windows queue:
 
 ```bash
 posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON TM-T88V Receipt (USB)"
+```
+
+## Module Usage
+
+### CommonJS
+
+Print flow (convert markdown, discover/select printer, submit RAW job):
+
+```js
+const { markdownToEscpos, listPrinters, selectPrinterName, printRawToWindowsPrinter } = require("posprint");
+
+async function printReceipt() {
+  const markdown = "# Cafe Receipt\n\n- Americano\n- Croissant";
+  const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
+  const printers = await listPrinters();
+  const printerName = selectPrinterName({
+    requested: null,
+    envPrinter: process.env.ESC_POS_PRINTER,
+    printers
+  });
+
+  await printRawToWindowsPrinter(printerName, Buffer.from(escpos));
+}
+
+printReceipt().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+```
+
+Conversion only (build ESC/POS bytes without sending a print job):
+
+```js
+const { markdownToEscpos } = require("posprint");
+
+const markdown = "# Dry Run\n\n- Tea\n- Muffin";
+const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
+
+console.log(`ESC/POS payload bytes: ${escpos.length}`);
+```
+
+### ESM interop
+
+Use default import and destructure named exports from the CommonJS module:
+
+```js
+import posprint from "posprint";
+
+const { markdownToEscpos } = posprint;
+const escpos = markdownToEscpos("# ESM Interop\n\n- Latte", { charsPerLine: 42 });
+
+console.log(`ESC/POS payload bytes: ${escpos.length}`);
 ```
 
 ## CLI Usage
