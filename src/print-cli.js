@@ -56,8 +56,6 @@ async function main(argv = process.argv.slice(2)) {
     return { mode: "version", version: pkg.version };
   }
 
-  validatePlatform();
-
   const dryRun = hasFlag(argv, "--dry-run");
   const strictMarkdown = hasFlag(argv, "--strict-markdown");
   const charsPerLineRaw = getArgValue(argv, "--chars-per-line") || "42";
@@ -71,6 +69,8 @@ async function main(argv = process.argv.slice(2)) {
   if (!Number.isInteger(charsPerLine) || charsPerLine <= 0) {
     throw new Error("Invalid --chars-per-line value. Provide a positive integer.");
   }
+
+  validatePlatform();
 
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));

@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const os = require("os");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
 const { resolveMarkdownInput, main, formatHelp, validatePlatform } = require("../src/print-cli");
 
@@ -78,5 +79,19 @@ test("main rejects non-integer --chars-per-line", async () => {
     () => main(["--chars-per-line=42abc", "--markdown=hello"]),
     /Invalid --chars-per-line value/
   );
+});
+
+test("main validates --chars-per-line before platform check", async () => {
+  const originalPlatform = os.platform;
+  os.platform = () => "linux";
+
+  try {
+    await assert.rejects(
+      () => main(["--chars-per-line=oops", "--markdown=hello"]),
+      /Invalid --chars-per-line value/
+    );
+  } finally {
+    os.platform = originalPlatform;
+  }
 });
 
