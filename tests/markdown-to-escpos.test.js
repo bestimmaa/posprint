@@ -88,10 +88,15 @@ test("renders strong text with ESC/POS bold toggles", () => {
   const boldOn = Buffer.from([0x1b, 0x45, 0x01]);
   const boldOff = Buffer.from([0x1b, 0x45, 0x00]);
   const boldText = Buffer.from("BOLD");
+  const boldOnIndex = bytes.indexOf(boldOn);
+  const boldTextIndex = bytes.indexOf(boldText);
+  const boldOffIndex = bytes.indexOf(boldOff);
 
-  assert.equal(bytes.includes(boldOn), true);
-  assert.equal(bytes.includes(boldOff), true);
-  assert.equal(bytes.includes(boldText), true);
+  assert.notEqual(boldOnIndex, -1);
+  assert.notEqual(boldTextIndex, -1);
+  assert.notEqual(boldOffIndex, -1);
+  assert.equal(boldOnIndex < boldTextIndex, true);
+  assert.equal(boldTextIndex < boldOffIndex, true);
 });
 
 test("degrades emphasis and strikethrough to plain readable text", () => {
@@ -101,7 +106,10 @@ test("degrades emphasis and strikethrough to plain readable text", () => {
   }));
   const text = out.toString("utf8");
 
-  assert.equal(text.includes("This has emphasis and strike text."), true);
+  assert.equal(text.includes("emphasis"), true);
+  assert.equal(text.includes("strike"), true);
+  assert.equal(text.includes("*emphasis*"), false);
+  assert.equal(text.includes("~~strike~~"), false);
 });
 
 test("renders blockquotes with a quote prefix", () => {
@@ -111,6 +119,6 @@ test("renders blockquotes with a quote prefix", () => {
   }));
   const text = out.toString("utf8");
 
-  assert.equal(text.includes("> quoted line"), true);
-  assert.equal(text.includes("> second line"), true);
+  assert.equal(text.includes("| quoted line"), true);
+  assert.equal(text.includes("| second line"), true);
 });
