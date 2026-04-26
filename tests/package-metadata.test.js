@@ -64,16 +64,24 @@ test("bitbucket pipeline config exists and defines required build keys", () => {
   assert.equal(existsSync(pipelinePath), true);
 
   const pipeline = readFileSync(pipelinePath, "utf8");
-  assert.match(pipeline, /\bimage\s*:/);
-  assert.match(pipeline, /\bpipelines\s*:/);
-  assert.match(pipeline, /\bdefault\s*:/);
-  assert.match(pipeline, /\bstep\s*:/);
-  assert.match(pipeline, /\bscript\s*:/);
-  assert.match(pipeline, /\bartifacts\s*:/);
+  assert.equal(pipeline.includes("image: node:20"), true);
+  assert.equal(pipeline.includes("pipelines:"), true);
+  assert.equal(pipeline.includes("default:"), true);
+  assert.equal(pipeline.includes("name: Test"), true);
+  assert.equal(pipeline.includes("name: Pack"), true);
+  assert.equal(pipeline.includes("npm test"), true);
+  assert.equal(pipeline.includes("npm pack"), true);
+  assert.equal(pipeline.includes("artifacts:"), true);
+  assert.equal(pipeline.includes("*.tgz"), true);
 });
 
 test("readme documents bitbucket pipeline and build artifacts", () => {
-  assert.equal(readme.includes("bitbucket-pipelines.yml"), true);
-  assert.match(readme, /bitbucket pipeline/i);
-  assert.match(readme, /artifacts?/i);
+  assert.equal(readme.includes("## Bitbucket Pipeline Artifact Build"), true);
+  assert.equal(readme.includes("all branch pushes"), true);
+  assert.equal(readme.includes("`npm test`"), true);
+  assert.equal(readme.includes("`npm pack`"), true);
+  assert.equal(
+    readme.includes("<packageName>-<version>-<sanitizedBranch>-<shortSha>.tgz"),
+    true
+  );
 });
