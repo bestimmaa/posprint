@@ -1,0 +1,27 @@
+image: node:20
+
+pipelines:
+  default:
+    - step:
+        name: Test
+        caches:
+          - node
+        script:
+          - npm ci
+          - npm test
+    - step:
+        name: Pack
+        caches:
+          - node
+        script:
+          - npm ci
+          - PKG_NAME=$(node -p "require('./package.json').name")
+          - PKG_VERSION=$(node -p "require('./package.json').version")
+          - SAFE_BRANCH=$(printf "%s" "$BITBUCKET_BRANCH" | sed 's/[^A-Za-z0-9._-]/-/g')
+          - SHORT_SHA=$(printf "%s" "$BITBUCKET_COMMIT" | cut -c1-7)
+          - RAW_TARBALL=$(npm pack)
+          - FINAL_TARBALL="${PKG_NAME}-${PKG_VERSION}-${SAFE_BRANCH}-${SHORT_SHA}.tgz"
+          - mv "$RAW_TARBALL" "$FINAL_TARBALL"
+          - ls -1 *.tgz
+        artifacts:
+          - "*.tgz"
