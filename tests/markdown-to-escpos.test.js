@@ -69,6 +69,55 @@ test("ordered list items are not duplicated", () => {
   assert.equal((text.match(/Filter Coffee/g) || []).length, 1);
 });
 
+test("retains multi-paragraph content within a list item", () => {
+  const markdown = "- First paragraph in item\n\n  Second paragraph in same item\n";
+  const out = Buffer.from(markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("- First paragraph in item"), true);
+  assert.equal(text.includes("Second paragraph in same item"), true);
+});
+
+test("retains nested ordered and unordered list content", () => {
+  const markdown = [
+    "1. Parent ordered",
+    "   - Child bullet",
+    "   1. Child ordered",
+    "",
+    "   Parent trailing paragraph",
+    "2. Sibling ordered",
+    ""
+  ].join("\n");
+  const out = Buffer.from(markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("1. Parent ordered"), true);
+  assert.equal(text.includes("- Child bullet"), true);
+  assert.equal(text.includes("1. Child ordered"), true);
+  assert.equal(text.includes("Parent trailing paragraph"), true);
+  assert.equal(text.includes("2. Sibling ordered"), true);
+});
+
+test("normalizes task markers to lowercase x", () => {
+  const markdown = "- [ ] open task\n- [X] done task\n";
+  const out = Buffer.from(markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("[ ]"), false);
+  assert.equal(text.includes("[X]"), false);
+  assert.equal(text.includes("- [x] open task"), true);
+  assert.equal(text.includes("- [x] done task"), true);
+});
+
 test("preserves explicit soft line breaks inside a paragraph", () => {
   const out = Buffer.from(markdownToEscpos("Subtotal 7.50\nTax 0.00\nTotal 7.50\n", {
     charsPerLine: 42,
