@@ -212,33 +212,116 @@ function splitSegmentsByWidth(segments, width) {
   const lines = [];
   let current = [];
   let currentWidth = 0;
+  let pendingSpaces = [];
+  let pendingSpaceWidth = 0;
+
+  function appendSegment(target, value, enabledBold) {
+    if (!value) {
+      return;
+    }
+
+    const boldValue = Boolean(enabledBold);
+    const prev = target[target.length - 1];
+    if (prev && prev.bold === boldValue) {
+      prev.text += value;
+      return;
+    }
+
+    target.push({ text: value, bold: boldValue });
+  }
+
+  function pushPendingSpaces() {
+    for (const part of pendingSpaces) {
+      appendSegment(current, part.text, part.bold);
+    }
+    currentWidth += pendingSpaceWidth;
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
+  }
 
   function pushCurrent() {
     lines.push(normalizeSegments(current));
     current = [];
     currentWidth = 0;
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
   }
 
-  for (const segment of normalizeSegments(segments)) {
-    let start = 0;
+  function appendTokenWithWrapping(token) {
+    for (const part of token.parts) {
+      let start = 0;
 
-    while (start < segment.text.length) {
-      if (currentWidth === safeWidth) {
-        pushCurrent();
+      while (start < part.text.length) {
+        if (currentWidth === safeWidth) {
+          pushCurrent();
+        }
+
+        const room = safeWidth - currentWidth;
+        const take = Math.min(room, part.text.length - start);
+        appendSegment(current, part.text.slice(start, start + take), part.bold);
+        currentWidth += take;
+        start += take;
       }
-
-      const room = safeWidth - currentWidth;
-      const take = Math.min(room, segment.text.length - start);
-      const part = segment.text.slice(start, start + take);
-
-      current.push({ text: part, bold: segment.bold });
-      currentWidth += part.length;
-      start += take;
     }
   }
 
-  if (current.length || lines.length === 0) {
+  const tokens = [];
+
+  for (const segment of normalizeSegments(segments)) {
+    for (const ch of segment.text) {
+      const isSpace = /\s/.test(ch);
+      const prevToken = tokens[tokens.length - 1];
+
+      if (!prevToken || prevToken.isSpace !== isSpace) {
+        tokens.push({ isSpace, length: 0, parts: [] });
+      }
+
+      const token = tokens[tokens.length - 1];
+      const prevPart = token.parts[token.parts.length - 1];
+      if (prevPart && prevPart.bold === Boolean(segment.bold)) {
+        prevPart.text += ch;
+      } else {
+        token.parts.push({ text: ch, bold: Boolean(segment.bold) });
+      }
+      token.length += 1;
+    }
+  }
+
+  for (const token of tokens) {
+    if (token.isSpace) {
+      if (currentWidth === 0) {
+        continue;
+      }
+      pendingSpaces = normalizeSegments([...pendingSpaces, ...token.parts]);
+      pendingSpaceWidth += token.length;
+      continue;
+    }
+
+    if (currentWidth > 0 && currentWidth + pendingSpaceWidth + token.length <= safeWidth) {
+      pushPendingSpaces();
+      appendTokenWithWrapping(token);
+      continue;
+    }
+
+    if (currentWidth > 0 && currentWidth + pendingSpaceWidth + token.length > safeWidth) {
+      pushCurrent();
+    }
+
+    appendTokenWithWrapping(token);
+    pendingSpaces = [];
+    pendingSpaceWidth = 0;
+  }
+
+  if (pendingSpaceWidth > 0 && currentWidth > 0 && currentWidth + pendingSpaceWidth <= safeWidth) {
+    pushPendingSpaces();
+  }
+
+  if (pendingSpaceWidth > 0 && currentWidth > 0 && currentWidth + pendingSpaceWidth > safeWidth) {
     pushCurrent();
+  }
+
+  if (current.length || lines.length === 0) {
+    lines.push(normalizeSegments(current));
   }
 
   return lines;

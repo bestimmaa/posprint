@@ -122,3 +122,37 @@ test("renders blockquotes with a quote prefix", () => {
   assert.equal(text.includes("| quoted line"), true);
   assert.equal(text.includes("| second line"), true);
 });
+
+test("wraps inline paragraph text on word boundaries without leading continuation spaces", () => {
+  const out = Buffer.from(markdownToEscpos("alpha beta gamma\n", {
+    charsPerLine: 10,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("alpha beta\ngamma\n"), true);
+  assert.equal(text.includes("\n gamma\n"), false);
+});
+
+test("keeps strong inline wrapping word-aware with no leading continuation spaces", () => {
+  const out = Buffer.from(markdownToEscpos("alpha **beta** gamma\n", {
+    charsPerLine: 10,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("\n gamma\n"), false);
+
+  const boldOn = Buffer.from([0x1b, 0x45, 0x01]);
+  const boldOff = Buffer.from([0x1b, 0x45, 0x00]);
+  const boldText = Buffer.from("beta");
+  const boldOnIndex = out.indexOf(boldOn);
+  const boldTextIndex = out.indexOf(boldText);
+  const boldOffIndex = out.indexOf(boldOff);
+
+  assert.notEqual(boldOnIndex, -1);
+  assert.notEqual(boldTextIndex, -1);
+  assert.notEqual(boldOffIndex, -1);
+  assert.equal(boldOnIndex < boldTextIndex, true);
+  assert.equal(boldTextIndex < boldOffIndex, true);
+});
