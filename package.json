@@ -1,16 +1,39 @@
 {
-  "name": "epson-playground",
+  "name": "@chris/tm88v-print-cli",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "TM-T88V ESC/POS over Windows RAW spooler",
   "main": "src/print-cli.js",
+  "bin": {
+    "tm88v-print": "src/print-cli.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "epson",
+    "tm-t88v",
+    "escpos",
+    "receipt",
+    "windows",
+    "spooler",
+    "cli"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chris/epson-playground.git"
+  },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "print": "node src/print-cli.js",
     "print:dry": "node src/print-cli.js --dry-run",
     "print:test": "node src/print-test.js",
     "print:test:dry": "node src/print-test.js --dry-run",
-    "print:test:save": "node src/print-test.js --save"
+    "print:test:save": "node src/print-test.js --save",
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
     "markdown-it": "^14.1.0"
