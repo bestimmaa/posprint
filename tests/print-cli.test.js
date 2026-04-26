@@ -3,8 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
-const { resolveMarkdownInput } = require("../src/print-cli");
-const { formatHelp, validatePlatform } = require("../src/print-cli");
+const { resolveMarkdownInput, main, formatHelp, validatePlatform } = require("../src/print-cli");
 
 test("getArgValue reads --flag=value", () => {
   assert.equal(getArgValue(["--markdown=hi"], "--markdown"), "hi");
@@ -55,4 +54,34 @@ test("validatePlatform throws for non-windows", () => {
 
 test("validatePlatform passes on win32", () => {
   assert.doesNotThrow(() => validatePlatform("win32"));
+});
+
+test("main returns help mode when --help flag is present", async () => {
+  const result = await main(["--help"]);
+  assert.equal(result.mode, "help");
+});
+
+test("main returns version mode when --version flag is present", async () => {
+  const result = await main(["--version"]);
+  assert.equal(result.mode, "version");
+});
+
+test("main rejects non-integer --chars-per-line", async () => {
+  await assert.rejects(
+    () => main(["--chars-per-line=42abc", "--markdown=hello"]),
+    /Invalid --chars-per-line value/
+  );
+});
+
+test("main rejects non-windows runtime for print flows", async () => {
+  const originalPlatform = process.platform;
+  Object.defineProperty(process, "platform", { value: "linux" });
+  try {
+    await assert.rejects(
+      () => main(["--markdown=hello"]),
+      /Windows-only runtime/
+    );
+  } finally {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+  }
 });

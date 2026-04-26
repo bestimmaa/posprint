@@ -61,7 +61,13 @@ async function main(argv = process.argv.slice(2)) {
 
   const dryRun = hasFlag(argv, "--dry-run");
   const strictMarkdown = hasFlag(argv, "--strict-markdown");
-  const charsPerLine = Number.parseInt(getArgValue(argv, "--chars-per-line") || "42", 10);
+  const charsPerLineRaw = getArgValue(argv, "--chars-per-line") || "42";
+
+  if (!/^\d+$/.test(charsPerLineRaw)) {
+    throw new Error("Invalid --chars-per-line value. Provide a positive integer.");
+  }
+
+  const charsPerLine = Number(charsPerLineRaw);
 
   if (!Number.isInteger(charsPerLine) || charsPerLine <= 0) {
     throw new Error("Invalid --chars-per-line value. Provide a positive integer.");
@@ -94,7 +100,16 @@ module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform };
 if (require.main === module) {
   main().then(
     (result) => {
-      if (!result.dryRun && result.mode !== "help" && result.mode !== "version") {
+      if (result.mode === "help" || result.mode === "version") {
+        return;
+      }
+
+      if (result.dryRun) {
+        console.log(`Dry run complete. Printer: ${result.printerName} | Payload bytes: ${result.payloadLength}`);
+        return;
+      }
+
+      if (!result.dryRun) {
         console.log("Print job submitted as RAW ESC/POS.");
       }
     },
