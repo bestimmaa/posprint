@@ -2,7 +2,105 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { markdownToEscpos, wrapText } = require("../src/markdown-to-escpos");
+const { rasterImage } = require("../src/escpos-builder");
+const {
+  imageFileToRaster,
+  resolveMarkdownImagePath,
+  assertSupportedExtension
+} = require("../src/image-to-escpos");
+
+test("builds GS v 0 raster command with expected header", () => {
+  const data = Uint8Array.from([0b10101010]);
+  const out = Buffer.from(rasterImage({ width: 8, height: 1, data }));
+
+  assert.equal(out[0], 0x1d);
+  assert.equal(out[1], 0x76);
+  assert.equal(out[2], 0x30);
+  assert.equal(out[3], 0x00);
+  assert.equal(out[4], 0x01);
+  assert.equal(out[5], 0x00);
+  assert.equal(out[6], 0x01);
+  assert.equal(out[7], 0x00);
+  assert.equal(out[8], 0b10101010);
+});
+
+test("resolves relative markdown image path from current working directory", () => {
+  const filePath = resolveMarkdownImagePath("tests/fixtures/logo-small.png");
+  assert.equal(filePath, path.resolve(process.cwd(), "tests/fixtures/logo-small.png"));
+});
+
+test("accepts png and jpg extensions case-insensitively", () => {
+  assert.equal(assertSupportedExtension("C:/tmp/logo.PNG"), ".png");
+  assert.equal(assertSupportedExtension("C:/tmp/logo.jpg"), ".jpg");
+  assert.equal(assertSupportedExtension("C:/tmp/logo.JPEG"), ".jpeg");
+});
+
+test("rejects unsupported image extension", () => {
+  assert.throws(() => assertSupportedExtension("C:/tmp/logo.gif"), /Unsupported image extension/);
+});
+
+test("converts png fixture to monochrome raster", () => {
+  const result = imageFileToRaster({
+    filePath: path.resolve("tests/fixtures/logo-small.png"),
+    charsPerLine: 42,
+    threshold: 128
+  });
+  assert.equal(result.width > 0, true);
+  assert.equal(result.height > 0, true);
+  assert.equal(result.data.length, Math.ceil(result.width / 8) * result.height);
+});
+
+test("converts jpg fixture to monochrome raster", () => {
+  const result = imageFileToRaster({
+    filePath: path.resolve("tests/fixtures/logo-small.jpg"),
+    charsPerLine: 42,
+    threshold: 128
+  });
+  assert.equal(result.width > 0, true);
+  assert.equal(result.height > 0, true);
+  assert.equal(result.data.length, Math.ceil(result.width / 8) * result.height);
+});
+
+test("clamps oversized image width to printable dots", () => {
+  const result = imageFileToRaster({
+    filePath: path.resolve("tests/fixtures/logo-wide.png"),
+    charsPerLine: 42,
+    threshold: 128
+  });
+  assert.equal(result.width, 336);
+});
+
+test("keeps natural size for image smaller than printable width", () => {
+  const result = imageFileToRaster({
+    filePath: path.resolve("tests/fixtures/logo-small.png"),
+    charsPerLine: 42,
+    threshold: 128
+  });
+  assert.equal(result.width, 64);
+});
+
+test("renders markdown image token as centered raster image", () => {
+  const out = Buffer.from(markdownToEscpos("![logo](tests/fixtures/logo-small.png)", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+
+  const alignCenter = Buffer.from([0x1b, 0x61, 0x01]);
+  const alignLeft = Buffer.from([0x1b, 0x61, 0x00]);
+  const rasterHeader = Buffer.from([0x1d, 0x76, 0x30, 0x00]);
+  assert.notEqual(out.indexOf(alignCenter), -1);
+  assert.notEqual(out.indexOf(rasterHeader), -1);
+  assert.notEqual(out.lastIndexOf(alignLeft), -1);
+});
+
+test("fails when markdown image file is missing", () => {
+  assert.throws(
+    () => markdownToEscpos("![logo](tests/fixtures/does-not-exist.png)", { charsPerLine: 42, strictMarkdown: false }),
+    /Unable to read image/
+  );
+});
 
 test("renders # heading with centered bold extra-large style sequence", () => {
   const out = markdownToEscpos("# Title\n", { charsPerLine: 42, strictMarkdown: false });
