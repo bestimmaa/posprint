@@ -78,3 +78,39 @@ test("preserves explicit soft line breaks inside a paragraph", () => {
 
   assert.equal(text.includes("Subtotal 7.50\nTax 0.00\nTotal 7.50"), true);
 });
+
+test("renders strong text with ESC/POS bold toggles", () => {
+  const bytes = Buffer.from(markdownToEscpos("before **BOLD** after\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+
+  const boldOn = Buffer.from([0x1b, 0x45, 0x01]);
+  const boldOff = Buffer.from([0x1b, 0x45, 0x00]);
+  const boldText = Buffer.from("BOLD");
+
+  assert.equal(bytes.includes(boldOn), true);
+  assert.equal(bytes.includes(boldOff), true);
+  assert.equal(bytes.includes(boldText), true);
+});
+
+test("degrades emphasis and strikethrough to plain readable text", () => {
+  const out = Buffer.from(markdownToEscpos("This has *emphasis* and ~~strike~~ text.\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("This has emphasis and strike text."), true);
+});
+
+test("renders blockquotes with a quote prefix", () => {
+  const out = Buffer.from(markdownToEscpos("> quoted line\n> second line\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("> quoted line"), true);
+  assert.equal(text.includes("> second line"), true);
+});
