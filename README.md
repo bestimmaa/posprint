@@ -177,6 +177,14 @@ Project scripts for ESC/POS and spooler verification:
 - `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` and `--dry-run`.
 - `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` to submit a RAW print job.
 
+## Bitbucket Pipeline Artifact Build
+
+- Pipeline runs on all branch pushes.
+- Test step runs `npm test`.
+- Pack step runs `npm pack`.
+- Artifact tarball name format: `<packageName>-<version>-<sanitizedBranch>-<shortSha>.tgz`.
+- Download generated tarballs from Bitbucket Artifacts for each pipeline run.
+
 ## Windows Requirements
 
 - Windows machine with Node.js 20+.

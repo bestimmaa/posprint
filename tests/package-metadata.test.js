@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { readFileSync } = require("fs");
+const { existsSync, readFileSync } = require("fs");
 const pkg = require("../package.json");
 const readmePath = path.resolve(__dirname, "..", "README.md");
 const readme = readFileSync(readmePath, "utf8");
@@ -56,4 +56,55 @@ test("package main points to module entrypoint", () => {
 test("readme documents CommonJS and ESM module usage", () => {
   assert.equal(readme.includes("const { markdownToEscpos"), true);
   assert.equal(readme.includes("import posprint from \"posprint\""), true);
+});
+
+test("bitbucket pipeline config exists and defines required build keys", () => {
+  const pipelinePath = path.resolve(__dirname, "..", "bitbucket-pipelines.yml");
+
+  assert.equal(existsSync(pipelinePath), true);
+
+  const pipeline = readFileSync(pipelinePath, "utf8");
+  assert.equal(pipeline.includes("image: node:20"), true);
+  assert.equal(pipeline.includes("pipelines:"), true);
+  assert.equal(pipeline.includes("default:"), true);
+  assert.equal(pipeline.includes("name: Test"), true);
+  assert.equal(pipeline.includes("name: Pack"), true);
+  assert.equal(pipeline.includes("npm test"), true);
+  assert.equal(pipeline.includes("npm pack"), true);
+  assert.equal(
+    pipeline.includes(
+      "RAW_PKG_NAME=$(node -p \"require('./package.json').name\")"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes(
+      "SAFE_PKG_NAME=$(printf \"%s\" \"$RAW_PKG_NAME\" | sed 's/[^A-Za-z0-9._-]/-/g')"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes(
+      "RAW_VERSION=$(node -p \"require('./package.json').version\")"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes("PKG_VERSION=$(printf \"%s\" \"$RAW_VERSION\" | sed 's/^v//')"),
+    true
+  );
+  assert.equal(pipeline.includes("FINAL_TARBALL=\"${SAFE_PKG_NAME}-${PKG_VERSION}"), true);
+  assert.equal(pipeline.includes("artifacts:"), true);
+  assert.equal(pipeline.includes("*.tgz"), true);
+});
+
+test("readme documents bitbucket pipeline and build artifacts", () => {
+  assert.equal(readme.includes("## Bitbucket Pipeline Artifact Build"), true);
+  assert.equal(readme.includes("all branch pushes"), true);
+  assert.equal(readme.includes("`npm test`"), true);
+  assert.equal(readme.includes("`npm pack`"), true);
+  assert.equal(
+    readme.includes("<packageName>-<version>-<sanitizedBranch>-<shortSha>.tgz"),
+    true
+  );
 });
