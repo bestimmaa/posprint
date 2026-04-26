@@ -48,3 +48,12 @@ test("markdown showcase fixture exists in tests fixtures", () => {
   );
   assert.doesNotThrow(() => readFileSync(fixturePath, "utf8"));
 });
+
+test("package main points to module entrypoint", () => {
+  assert.equal(pkg.main, "src/index.js");
+});
+
+test("readme documents CommonJS and ESM module usage", () => {
+  assert.equal(readme.includes("const { markdownToEscpos"), true);
+  assert.equal(readme.includes("import posprint from \"posprint\""), true);
+});

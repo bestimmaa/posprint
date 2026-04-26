@@ -3,9 +3,8 @@
 
 const os = require("os");
 const { readFile } = require("fs/promises");
-const { getArgValue, hasFlag, selectPrinterName } = require("./cli-common");
-const { markdownToEscpos } = require("./markdown-to-escpos");
-const { listPrinters, printRawToWindowsPrinter } = require("./windows-raw-printer");
+const { getArgValue, hasFlag } = require("./cli-common");
+const { markdownToEscpos, listPrinters, printRawToWindowsPrinter, selectPrinterName } = require("./index");
 const pkg = require("../package.json");
 
 function formatHelp() {
