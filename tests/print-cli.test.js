@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
 const { resolveMarkdownInput } = require("../src/print-cli");
+const { formatHelp, validatePlatform } = require("../src/print-cli");
 
 test("getArgValue reads --flag=value", () => {
   assert.equal(getArgValue(["--markdown=hi"], "--markdown"), "hi");
@@ -39,4 +40,19 @@ test("resolveMarkdownInput throws when no markdown input provided", async () => 
     () => resolveMarkdownInput({ argv: [] }),
     /Provide --markdown-file or --markdown/
   );
+});
+
+test("formatHelp includes core options", () => {
+  const text = formatHelp();
+  assert.equal(text.includes("--markdown-file"), true);
+  assert.equal(text.includes("--dry-run"), true);
+  assert.equal(text.includes("--strict-markdown"), true);
+});
+
+test("validatePlatform throws for non-windows", () => {
+  assert.throws(() => validatePlatform("linux"), /Windows-only runtime/);
+});
+
+test("validatePlatform passes on win32", () => {
+  assert.doesNotThrow(() => validatePlatform("win32"));
 });
