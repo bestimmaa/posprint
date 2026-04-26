@@ -84,6 +84,24 @@ Supported flags:
 - `--strict-markdown`: Reject unsupported markdown/HTML constructs.
 - `--dry-run`: Build payload and select printer, but do not send print job.
 
+### Fixed Printer Charset Defaults
+
+The renderer now forces fixed ESC/POS character mapping defaults at the start of each markdown print job:
+
+- International charset: `ESC R 0` (USA/default)
+- Code page: `ESC t 0` (CP437/default)
+
+Why this is enabled:
+
+- Prevents printer-default locale mappings from changing symbols like `[`, `]`, and `|`.
+- Keeps task list markers (`[ ]`, `[x]`) and blockquote prefix (`|`) predictable across machines.
+
+Implications:
+
+- Markdown output is more reproducible between environments and printers.
+- If your printer workflow relies on a different locale/code page for accented characters or non-ASCII scripts, those characters may render differently under this fixed profile.
+- This project currently prioritizes stable ASCII-compatible receipt symbols for markdown fixtures and tests.
+
 Selection behavior:
 
 1. `--printer` flag (if provided)

@@ -54,7 +54,17 @@ test("renders nested list parent and child markers", () => {
   const out = Buffer.from(markdownToEscpos("- parent\n  - child\n", { charsPerLine: 42, strictMarkdown: false }));
   const text = out.toString("utf8");
   assert.equal(text.includes("- parent"), true);
-  assert.equal(text.includes("- child"), true);
+  assert.equal(text.includes("  - child"), true);
+});
+
+test("sets ESC/POS international charset and code page to fixed defaults", () => {
+  const out = Buffer.from(markdownToEscpos("- [ ] open\n> quote\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+
+  assert.equal(out.includes(Buffer.from([0x1b, 0x52, 0x00])), true);
+  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x00])), true);
 });
 
 test("preserves marker for empty parent list item with nested child", () => {

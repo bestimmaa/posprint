@@ -1,7 +1,19 @@
 "use strict";
 
 const MarkdownIt = require("markdown-it");
-const { concat, init, align, bold, size, line, text, feed, cut } = require("./escpos-builder");
+const {
+  concat,
+  init,
+  setInternationalCharset,
+  setCodePage,
+  align,
+  bold,
+  size,
+  line,
+  text,
+  feed,
+  cut
+} = require("./escpos-builder");
 
 function wrapText(text, width) {
   const value = String(text || "").trim();
@@ -290,6 +302,9 @@ function splitSegmentsByWidth(segments, width) {
   for (const token of tokens) {
     if (token.isSpace) {
       if (currentWidth === 0) {
+        if (lines.length === 0 && current.length === 0) {
+          appendTokenWithWrapping(token);
+        }
         continue;
       }
       pendingSpaces = normalizeSegments([...pendingSpaces, ...token.parts]);
@@ -404,6 +419,10 @@ function normalizeTaskMarkersInSegments(segments) {
   }));
 }
 
+function getListIndent(depth) {
+  return "  ".repeat(Math.max(0, depth - 1));
+}
+
 function renderListItem(text, chunks, charsPerLine, marker) {
   const lines = wrapText(`${marker} ${String(text || "").trim()}`, charsPerLine);
   for (const value of lines) {
@@ -428,7 +447,7 @@ function markdownToEscpos(markdown, options = {}) {
   const strictMarkdown = Boolean(options.strictMarkdown);
   const md = new MarkdownIt({ html: true, linkify: true, breaks: false });
   const tokens = md.parse(String(markdown || ""), {});
-  const chunks = [init()];
+  const chunks = [init(), setInternationalCharset(0), setCodePage(0)];
 
   const listStack = [];
   const listItemStack = [];
@@ -457,8 +476,9 @@ function markdownToEscpos(markdown, options = {}) {
         let segments = inlineToSegments(children, strictMarkdown);
 
         if (currentListItem && !currentListItem.hasRenderedContent) {
+          const indent = getListIndent(listItemDepth);
           segments = normalizeTaskMarkersInSegments(segments);
-          segments = [{ text: `${currentListItem.marker} `, bold: false }, ...segments];
+          segments = [{ text: `${indent}${currentListItem.marker} `, bold: false }, ...segments];
           currentListItem.hasRenderedContent = true;
         }
 
@@ -488,7 +508,8 @@ function markdownToEscpos(markdown, options = {}) {
         const currentListItem = listItemStack[listItemStack.length - 1];
         if (currentListItem && !currentListItem.hasRenderedContent) {
           const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          const indent = getListIndent(listItemDepth);
+          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
           currentListItem.hasRenderedContent = true;
         }
       }
@@ -501,7 +522,8 @@ function markdownToEscpos(markdown, options = {}) {
         const currentListItem = listItemStack[listItemStack.length - 1];
         if (currentListItem && !currentListItem.hasRenderedContent) {
           const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          chunks.push(line(`${quotePrefix}${currentListItem.marker} `));
+          const indent = getListIndent(listItemDepth);
+          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
           currentListItem.hasRenderedContent = true;
         }
       }

@@ -27,6 +27,16 @@ function init() {
   return byte(0x1b, 0x40);
 }
 
+function setInternationalCharset(value = 0) {
+  const n = Math.max(0, Math.min(15, Number(value) || 0));
+  return byte(0x1b, 0x52, n);
+}
+
+function setCodePage(value = 0) {
+  const n = Math.max(0, Math.min(255, Number(value) || 0));
+  return byte(0x1b, 0x74, n);
+}
+
 function align(mode) {
   const map = { left: 0, center: 1, right: 2 };
   const n = map[mode] ?? 0;
@@ -94,6 +104,8 @@ module.exports = {
   concat,
   text,
   init,
+  setInternationalCharset,
+  setCodePage,
   align,
   bold,
   size,
