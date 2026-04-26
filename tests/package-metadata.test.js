@@ -71,6 +71,29 @@ test("bitbucket pipeline config exists and defines required build keys", () => {
   assert.equal(pipeline.includes("name: Pack"), true);
   assert.equal(pipeline.includes("npm test"), true);
   assert.equal(pipeline.includes("npm pack"), true);
+  assert.equal(
+    pipeline.includes(
+      "RAW_PKG_NAME=$(node -p \"require('./package.json').name\")"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes(
+      "SAFE_PKG_NAME=$(printf \"%s\" \"$RAW_PKG_NAME\" | sed 's/[^A-Za-z0-9._-]/-/g')"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes(
+      "RAW_VERSION=$(node -p \"require('./package.json').version\")"
+    ),
+    true
+  );
+  assert.equal(
+    pipeline.includes("PKG_VERSION=$(printf \"%s\" \"$RAW_VERSION\" | sed 's/^v//')"),
+    true
+  );
+  assert.equal(pipeline.includes("FINAL_TARBALL=\"${SAFE_PKG_NAME}-${PKG_VERSION}"), true);
   assert.equal(pipeline.includes("artifacts:"), true);
   assert.equal(pipeline.includes("*.tgz"), true);
 });

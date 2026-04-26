@@ -15,12 +15,14 @@ pipelines:
           - node
         script:
           - npm ci
-          - PKG_NAME=$(node -p "require('./package.json').name")
-          - PKG_VERSION=$(node -p "require('./package.json').version")
+          - RAW_PKG_NAME=$(node -p "require('./package.json').name")
+          - SAFE_PKG_NAME=$(printf "%s" "$RAW_PKG_NAME" | sed 's/[^A-Za-z0-9._-]/-/g')
+          - RAW_VERSION=$(node -p "require('./package.json').version")
+          - PKG_VERSION=$(printf "%s" "$RAW_VERSION" | sed 's/^v//')
           - SAFE_BRANCH=$(printf "%s" "$BITBUCKET_BRANCH" | sed 's/[^A-Za-z0-9._-]/-/g')
           - SHORT_SHA=$(printf "%s" "$BITBUCKET_COMMIT" | cut -c1-7)
           - RAW_TARBALL=$(npm pack)
-          - FINAL_TARBALL="${PKG_NAME}-${PKG_VERSION}-${SAFE_BRANCH}-${SHORT_SHA}.tgz"
+          - FINAL_TARBALL="${SAFE_PKG_NAME}-${PKG_VERSION}-${SAFE_BRANCH}-${SHORT_SHA}.tgz"
           - mv "$RAW_TARBALL" "$FINAL_TARBALL"
           - ls -1 *.tgz
         artifacts:
