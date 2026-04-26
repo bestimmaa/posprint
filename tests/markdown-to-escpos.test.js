@@ -76,9 +76,15 @@ test("retains multi-paragraph content within a list item", () => {
     strictMarkdown: false
   }));
   const text = out.toString("utf8");
+  const lines = text.split(/\r?\n/);
+  const firstParagraphLine = lines.findIndex((line) => line.includes("First paragraph in item"));
+  const secondParagraphLine = lines.findIndex((line) => line.includes("Second paragraph in same item"));
+  const betweenParagraphs = lines.slice(firstParagraphLine + 1, secondParagraphLine);
 
-  assert.equal(text.includes("- First paragraph in item"), true);
-  assert.equal(text.includes("Second paragraph in same item"), true);
+  assert.notEqual(firstParagraphLine, -1);
+  assert.notEqual(secondParagraphLine, -1);
+  assert.equal(secondParagraphLine > firstParagraphLine, true);
+  assert.equal(betweenParagraphs.some((line) => line.trim() === ""), true);
 });
 
 test("retains nested ordered and unordered list content", () => {
@@ -96,15 +102,30 @@ test("retains nested ordered and unordered list content", () => {
     strictMarkdown: false
   }));
   const text = out.toString("utf8");
+  const parentIndex = text.indexOf("1. Parent ordered");
+  const childBulletIndex = text.indexOf("- Child bullet");
+  const childOrderedIndex = text.indexOf("1. Child ordered");
+  const trailingParagraphIndex = text.indexOf("Parent trailing paragraph");
+  const siblingIndex = text.indexOf("2. Sibling ordered");
 
-  assert.equal(text.includes("1. Parent ordered"), true);
-  assert.equal(text.includes("- Child bullet"), true);
-  assert.equal(text.includes("1. Child ordered"), true);
-  assert.equal(text.includes("Parent trailing paragraph"), true);
-  assert.equal(text.includes("2. Sibling ordered"), true);
+  assert.equal((text.match(/1\. Parent ordered/g) || []).length, 1);
+  assert.equal((text.match(/- Child bullet/g) || []).length, 1);
+  assert.equal((text.match(/1\. Child ordered/g) || []).length, 1);
+  assert.equal((text.match(/Parent trailing paragraph/g) || []).length, 1);
+  assert.equal((text.match(/2\. Sibling ordered/g) || []).length, 1);
+
+  assert.notEqual(parentIndex, -1);
+  assert.notEqual(childBulletIndex, -1);
+  assert.notEqual(childOrderedIndex, -1);
+  assert.notEqual(trailingParagraphIndex, -1);
+  assert.notEqual(siblingIndex, -1);
+  assert.equal(parentIndex < childBulletIndex, true);
+  assert.equal(childBulletIndex < childOrderedIndex, true);
+  assert.equal(childOrderedIndex < trailingParagraphIndex, true);
+  assert.equal(trailingParagraphIndex < siblingIndex, true);
 });
 
-test("normalizes task markers to lowercase x", () => {
+test("keeps unchecked task marker and normalizes checked marker to lowercase x", () => {
   const markdown = "- [ ] open task\n- [X] done task\n";
   const out = Buffer.from(markdownToEscpos(markdown, {
     charsPerLine: 42,
@@ -112,9 +133,9 @@ test("normalizes task markers to lowercase x", () => {
   }));
   const text = out.toString("utf8");
 
-  assert.equal(text.includes("[ ]"), false);
   assert.equal(text.includes("[X]"), false);
-  assert.equal(text.includes("- [x] open task"), true);
+  assert.equal(text.includes("- [ ] open task"), true);
+  assert.equal(text.includes("- [x] open task"), false);
   assert.equal(text.includes("- [x] done task"), true);
 });
 
