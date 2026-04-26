@@ -1,7 +1,7 @@
 # Markdown Printing Design (TM-T88V)
 
 Date: 2026-04-26
-Project: epson-playground
+Project: posprint
 Status: Draft approved in chat, ready for implementation planning
 
 ## Goal

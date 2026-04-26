@@ -10,7 +10,7 @@ const pkg = require("../package.json");
 
 function formatHelp() {
   return [
-    "Usage: tm88v-print [options]",
+    "Usage: posprint [options]",
     "",
     "Options:",
     "  --markdown-file=<path>   Read markdown from file",

@@ -1,6 +1,6 @@
 # AGENTS
 
-This playground is for exploring the EPSON TM-T88V thermal printer.
+This repository is for exploring the EPSON TM-T88V thermal printer.
 
 ## Scope
 - Focus on printer setup, drivers, SDKs, and ESC/POS experimentation for TM-T88V.

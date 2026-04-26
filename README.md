@@ -1,177 +1,123 @@
-# ESC/POS over Windows Spooler (Node.js)
+# posprint
 
-This playground uses the Windows print spooler (RAW mode) to send ESC/POS bytes to an EPSON TM-T88V from Node.js.
+`posprint` is a Node.js CLI for sending ESC/POS receipts to Epson TM-T88V printers through the Windows RAW spooler, with markdown-to-receipt support for repeatable print flows.
 
-## Prerequisites
+## Install
 
-- Windows machine with the printer installed in Windows Printers.
-- Node.js 20+.
+Install globally:
 
-## Setup
+```bash
+npm i -g posprint
+```
+
+For local development in this repository:
 
 ```bash
 npm install
 ```
 
-Dependencies are installed via `npm install` (including `markdown-it` for markdown rendering).
+## Quick Start
 
-## Global CLI Install
-
-Install globally:
+Show CLI help:
 
 ```bash
-npm i -g @chris/tm88v-print-cli
+posprint --help
 ```
 
-Show help:
+Dry run from a markdown receipt file (build payload and select printer, no print job):
 
 ```bash
-tm88v-print --help
+posprint --dry-run --markdown-file="TEST_RECEIPT.md"
 ```
 
-Dry run from markdown file:
+Send a real print job to a specific Windows queue:
 
 ```bash
-tm88v-print --dry-run --markdown-file="TEST_RECEIPT.md"
+posprint --markdown-file="TEST_RECEIPT.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
-## Run
+## CLI Usage
 
-Dry-run (list printers and selected target only):
-
-```bash
-npm run print:test:dry
+```text
+posprint [options]
 ```
 
-Send test receipt:
+Flags:
 
-```bash
-npm run print:test -- --printer="EPSON TM-T88V Receipt"
-```
+- `--markdown-file=<path>`: Read receipt content from a markdown file.
+- `--markdown="..."`: Pass markdown inline as a single argument.
+- `--printer="Printer Name"`: Target an exact Windows printer queue.
+- `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
+- `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
+- `--dry-run`: Build and inspect output without sending a print job.
 
-You can also set the printer via environment variable:
+Printer selection order:
 
-```powershell
-$env:ESC_POS_PRINTER="EPSON TM-T88V Receipt"
-npm run print:test
-```
+1. `--printer`
+2. `ESC_POS_PRINTER`
+3. First printer matching `epson|tm-t88v|receipt`
+4. First detected Windows printer
 
-Save the generated ESC/POS payload to `tmp/escpos-demo.bin`:
-
-```bash
-npm run print:test:save
-```
-
-## Markdown Printing
+## Examples
 
 Dry run with inline markdown:
 
 ```bash
-npm run print:dry -- --markdown="# Hello\n\n- One\n- Two"
+posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant" --chars-per-line=42
 ```
 
-PowerShell multiline example:
+PowerShell multiline markdown:
 
 ```powershell
-npm run print:dry -- --markdown "# Hello`n`n- One`n- Two"
+posprint --dry-run --markdown "# Shift Open`n`n- Till: 3`n- Cashier: Sam"
 ```
 
-Print from markdown file:
+Print from file to the USB receipt queue:
 
 ```bash
-npm run print -- --markdown-file="tests/fixtures/markdown-basic.md" --printer="EPSON TM-T88V Receipt"
+posprint --markdown-file="tests/fixtures/markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
-Strict mode:
+Validate markdown strictly before printing:
 
 ```bash
-npm run print -- --markdown-file="receipt.md" --strict-markdown
+posprint --dry-run --markdown-file="tests/fixtures/unsupported-html.md" --strict-markdown
 ```
 
-### CLI Usage
+Use environment override for printer selection:
 
-The production markdown CLI is `src/print-cli.js` and is exposed through:
+```powershell
+$env:ESC_POS_PRINTER="EPSON TM-T88V Receipt (USB)"
+posprint --markdown-file="TEST_RECEIPT.md"
+```
 
-- `npm run print`
-- `npm run print:dry`
+## Development
 
-Supported flags:
-
-- `--markdown-file=<path>`: Read markdown from a file.
-- `--markdown="..."`: Pass markdown inline (single argument).
-- `--printer="Printer Name"`: Choose the exact Windows printer.
-- `--chars-per-line=<n>`: Wrap width for receipt formatting (default: `42`).
-- `--strict-markdown`: Reject unsupported markdown/HTML constructs.
-- `--dry-run`: Build payload and select printer, but do not send print job.
-
-### Fixed Printer Charset Defaults
-
-The renderer now forces fixed ESC/POS character mapping defaults at the start of each markdown print job:
-
-- International charset: `ESC R 0` (USA/default)
-- Code page: `ESC t 0` (CP437/default)
-
-Why this is enabled:
-
-- Prevents printer-default locale mappings from changing symbols like `[`, `]`, and `|`.
-- Keeps task list markers (`[ ]`, `[x]`) and blockquote prefix (`|`) predictable across machines.
-
-Implications:
-
-- Markdown output is more reproducible between environments and printers.
-- If your printer workflow relies on a different locale/code page for accented characters or non-ASCII scripts, those characters may render differently under this fixed profile.
-- This project currently prioritizes stable ASCII-compatible receipt symbols for markdown fixtures and tests.
-
-### Markdown Best Practices for Thermal Receipts
-
-- Keep line width realistic: start with `--chars-per-line=42` for TM-T88V 80mm paper and adjust only after dry-run checks.
-- Prefer ASCII-friendly content for operational receipts: use symbols like `[ ]`, `[x]`, `|`, and `-` consistently.
-- Use hierarchy sparingly: one `#` title and `##` section headers are usually enough on receipt paper.
-- Keep lists short and shallow: nested lists are supported, but one nesting level is usually easiest to read when printed.
-- Write short paragraphs: convert long prose into bullets when possible to avoid hard-to-scan wraps.
-- Use code blocks only for fixed-width snippets (IDs, shift metadata, diagnostics), and keep them compact.
-- Always dry-run before real print:
+Install dependencies:
 
 ```bash
-npm run print:dry -- --markdown-file="path/to/file.md" --chars-per-line=42
+npm install
 ```
 
-- Then print to the exact USB queue:
+Run tests:
 
 ```bash
-npm run print -- --markdown-file="path/to/file.md" --printer="EPSON TM-T88V Receipt (USB)"
+npm test
 ```
 
-- Use strict mode while authoring templates to catch unsupported syntax early:
+Project scripts for ESC/POS and spooler verification:
 
-```bash
-npm run print:dry -- --markdown-file="path/to/file.md" --strict-markdown
-```
+- `npm run print:test:dry` for printer discovery and dry-run validation.
+- `npm run print:test` for sending the test receipt payload.
+- `npm run print:test:save` for writing ESC/POS output to `tmp/escpos-demo.bin`.
 
-- See `tests/fixtures/markdown-showcase.md` for a reference layout that exercises supported features and prints cleanly.
+## Windows Requirements
 
-Selection behavior:
+- Windows machine with Node.js 20+.
+- Epson TM-T88V installed as a Windows printer.
+- Printer queue available to the current user session.
+- RAW printing enabled through the Windows spooler path.
 
-1. `--printer` flag (if provided)
-2. `ESC_POS_PRINTER` environment variable
-3. First printer matching `epson|tm-t88v|receipt`
-4. First detected Windows printer
+## License
 
-Examples:
-
-```bash
-# Dry run with explicit width
-npm run print:dry -- --markdown="# Hello\n\n1. Espresso\n2. Croissant" --chars-per-line=42
-
-# Real print from file
-npm run print -- --markdown-file="tests/fixtures/markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
-
-# Validate markdown strictly without printing
-npm run print:dry -- --markdown-file="tests/fixtures/unsupported-html.md" --strict-markdown
-```
-
-## Files
-
-- `src/escpos-builder.js` - ESC/POS command builder and demo receipt.
-- `src/windows-raw-printer.js` - Windows RAW spooler bridge via PowerShell and WinSpool API.
-- `src/print-test.js` - CLI test entrypoint.
+MIT

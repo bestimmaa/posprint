@@ -1,11 +1,11 @@
 {
-  "name": "@chris/tm88v-print-cli",
+  "name": "posprint",
   "version": "0.1.0",
   "private": false,
-  "description": "TM-T88V ESC/POS over Windows RAW spooler",
+  "description": "ESC/POS printing CLI for EPSON TM-T88V over Windows RAW spooler",
   "main": "src/print-cli.js",
   "bin": {
-    "tm88v-print": "src/print-cli.js"
+    "posprint": "src/print-cli.js"
   },
   "files": [
     "src",
@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chris/epson-playground.git"
+    "url": "git+https://github.com/chris/posprint.git"
   },
   "scripts": {
     "test": "node --test tests/*.test.js",

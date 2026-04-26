@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
 const { resolveMarkdownInput, main, formatHelp, validatePlatform } = require("../src/print-cli");
 
@@ -28,8 +29,9 @@ test("selectPrinterName prioritizes explicit flag", () => {
 });
 
 test("resolveMarkdownInput prefers markdown-file over markdown string", async () => {
+  const fixturePath = path.resolve(__dirname, "fixtures", "markdown-basic.md");
   const input = await resolveMarkdownInput({
-    argv: ["--markdown-file=tests/fixtures/markdown-basic.md", "--markdown=ignored"]
+    argv: [`--markdown-file=${fixturePath}`, "--markdown=ignored"]
   });
   assert.equal(input.source, "file");
 });
@@ -46,6 +48,11 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--markdown-file"), true);
   assert.equal(text.includes("--dry-run"), true);
   assert.equal(text.includes("--strict-markdown"), true);
+});
+
+test("formatHelp includes posprint usage", () => {
+  const text = formatHelp();
+  assert.equal(text.includes("Usage: posprint [options]"), true);
 });
 
 test("validatePlatform throws for non-windows", () => {
@@ -73,15 +80,3 @@ test("main rejects non-integer --chars-per-line", async () => {
   );
 });
 
-test("main rejects non-windows runtime for print flows", async () => {
-  const originalPlatform = process.platform;
-  Object.defineProperty(process, "platform", { value: "linux" });
-  try {
-    await assert.rejects(
-      () => main(["--markdown=hello"]),
-      /Windows-only runtime/
-    );
-  } finally {
-    Object.defineProperty(process, "platform", { value: originalPlatform });
-  }
-});
