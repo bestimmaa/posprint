@@ -8,6 +8,7 @@ test("module api exports expected public functions", () => {
 
   assert.equal(typeof api.markdownToEscpos, "function");
   assert.equal(typeof api.listPrinters, "function");
+  assert.equal(typeof api.printRaw, "function");
   assert.equal(typeof api.printRawToWindowsPrinter, "function");
   assert.equal(typeof api.selectPrinterName, "function");
 });

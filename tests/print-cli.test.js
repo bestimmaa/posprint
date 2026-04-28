@@ -3,7 +3,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const os = require("os");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
 const { resolveMarkdownInput, main, formatHelp, validatePlatform } = require("../src/print-cli");
 
@@ -56,12 +55,16 @@ test("formatHelp includes posprint usage", () => {
   assert.equal(text.includes("Usage: posprint [options]"), true);
 });
 
-test("validatePlatform throws for non-windows", () => {
-  assert.throws(() => validatePlatform("linux"), /Windows-only runtime/);
-});
-
 test("validatePlatform passes on win32", () => {
   assert.doesNotThrow(() => validatePlatform("win32"));
+});
+
+test("validatePlatform passes on linux", () => {
+  assert.doesNotThrow(() => validatePlatform("linux"));
+});
+
+test("validatePlatform throws on unsupported platform", () => {
+  assert.throws(() => validatePlatform("darwin"), /Unsupported platform/);
 });
 
 test("main returns help mode when --help flag is present", async () => {
@@ -82,16 +85,23 @@ test("main rejects non-integer --chars-per-line", async () => {
 });
 
 test("main validates --chars-per-line before platform check", async () => {
-  const originalPlatform = os.platform;
-  os.platform = () => "linux";
+  await assert.rejects(
+    () => main(["--chars-per-line=oops", "--markdown=hello"], { platform: () => "darwin" }),
+    /Invalid --chars-per-line value/
+  );
+});
 
-  try {
-    await assert.rejects(
-      () => main(["--chars-per-line=oops", "--markdown=hello"]),
-      /Invalid --chars-per-line value/
-    );
-  } finally {
-    os.platform = originalPlatform;
-  }
+test("main prints on linux using injected printRaw", async () => {
+  const result = await main(
+    ["--markdown=# hi", "--printer=Printer A"],
+    {
+      platform: () => "linux",
+      listPrinters: async () => ["Printer A"],
+      printRaw: async () => ({ backend: "linux" })
+    }
+  );
+
+  assert.equal(result.printerName, "Printer A");
+  assert.equal(result.dryRun, false);
 });
 
