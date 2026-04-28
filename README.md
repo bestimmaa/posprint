@@ -1,6 +1,6 @@
 # posprint
 
-`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V through the Windows RAW spooler, with practical workflows for conversion-only and real print jobs.
+`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V, supporting Windows RAW spooler and Linux CUPS raw printing, with practical workflows for conversion-only and real print jobs.
 
 ## Install
 
@@ -30,7 +30,7 @@ Dry run from the test fixture (build payload and select printer, no print job):
 posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md"
 ```
 
-Send a real print job to a specific Windows queue:
+Send a real print job to a specific printer queue (Windows or Linux):
 
 ```bash
 posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON TM-T88V Receipt (USB)"
@@ -43,7 +43,7 @@ posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON 
 Print flow (convert markdown, discover/select printer, submit RAW job):
 
 ```js
-const { markdownToEscpos, listPrinters, selectPrinterName, printRawToWindowsPrinter } = require("posprint");
+const { markdownToEscpos, listPrinters, selectPrinterName, printRaw } = require("posprint");
 
 async function printReceipt() {
   const markdown = "# Cafe Receipt\n\n- Americano\n- Croissant";
@@ -55,7 +55,7 @@ async function printReceipt() {
     printers
   });
 
-  await printRawToWindowsPrinter(printerName, Buffer.from(escpos));
+  await printRaw(printerName, Buffer.from(escpos));
 }
 
 printReceipt().catch((error) => {
@@ -98,7 +98,7 @@ Flags:
 
 - `--markdown-file=<path>`: Read receipt content from a markdown file.
 - `--markdown="..."`: Pass markdown inline as a single argument.
-- `--printer="Printer Name"`: Target an exact Windows printer queue.
+- `--printer="Printer Name"`: Target an exact printer queue.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.
@@ -123,7 +123,7 @@ Printer selection order:
 1. `--printer`
 2. `ESC_POS_PRINTER`
 3. First printer matching `epson|tm-t88v|receipt`
-4. First detected Windows printer
+4. First detected printer
 
 ## Examples
 
@@ -191,6 +191,13 @@ Project scripts for ESC/POS and spooler verification:
 - Epson TM-T88V installed as a Windows printer.
 - Printer queue available to the current user session.
 - RAW printing enabled through the Windows spooler path.
+
+## Linux Requirements
+
+- Linux machine with Node.js 20+.
+- CUPS client tooling installed (`lpstat`, `lp`, and/or `lpr`).
+- Printer queue available to the current user session.
+- ESC/POS is sent in raw mode (`lp -o raw`, fallback `lpr -o raw`).
 
 ## License
 
