@@ -4,7 +4,7 @@
 const os = require("os");
 const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
-const { markdownToEscpos, listPrinters, printRawToWindowsPrinter, selectPrinterName } = require("./index");
+const { markdownToEscpos, listPrinters, printRaw, selectPrinterName } = require("./index");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -14,7 +14,7 @@ function formatHelp() {
     "Options:",
     "  --markdown-file=<path>   Read markdown from file",
     "  --markdown=<text>        Read markdown inline",
-    "  --printer=<name>         Select Windows printer",
+    "  --printer=<name>         Select printer",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
@@ -24,8 +24,8 @@ function formatHelp() {
 }
 
 function validatePlatform(platform = os.platform()) {
-  if (platform !== "win32") {
-    throw new Error("Windows-only runtime: this CLI currently uses the Windows RAW spooler path.");
+  if (platform !== "win32" && platform !== "linux") {
+    throw new Error(`Unsupported platform: ${platform}. Supported platforms are win32 and linux.`);
   }
 }
 
@@ -45,7 +45,7 @@ async function resolveMarkdownInput({ argv }) {
   throw new Error("Missing markdown input. Provide --markdown-file or --markdown.");
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(2), deps = {}) {
   if (hasFlag(argv, "--help")) {
     console.log(formatHelp());
     return { mode: "help" };
@@ -70,14 +70,18 @@ async function main(argv = process.argv.slice(2)) {
     throw new Error("Invalid --chars-per-line value. Provide a positive integer.");
   }
 
-  validatePlatform();
+  const platform = deps.platform || os.platform;
+  const listPrintersFn = deps.listPrinters || listPrinters;
+  const printRawFn = deps.printRaw || printRaw;
+
+  validatePlatform(platform());
 
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));
-  const printers = await listPrinters();
+  const printers = await listPrintersFn();
 
   if (!printers.length) {
-    throw new Error("No Windows printers found.");
+    throw new Error("No printers found.");
   }
 
   const printerName = selectPrinterName({
@@ -90,7 +94,7 @@ async function main(argv = process.argv.slice(2)) {
     return { printerName, payloadLength: payload.length, dryRun: true };
   }
 
-  await printRawToWindowsPrinter(printerName, payload);
+  await printRawFn(printerName, payload);
   return { printerName, payloadLength: payload.length, dryRun: false };
 }
 
