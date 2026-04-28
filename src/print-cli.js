@@ -74,10 +74,15 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const listPrintersFn = deps.listPrinters || listPrinters;
   const printRawFn = deps.printRaw || printRaw;
 
-  validatePlatform(platform());
-
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));
+
+  if (dryRun) {
+    return { printerName: null, payloadLength: payload.length, dryRun: true };
+  }
+
+  validatePlatform(platform());
+
   const printers = await listPrintersFn();
 
   if (!printers.length) {
@@ -89,10 +94,6 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     envPrinter: process.env.ESC_POS_PRINTER,
     printers
   });
-
-  if (dryRun) {
-    return { printerName, payloadLength: payload.length, dryRun: true };
-  }
 
   await printRawFn(printerName, payload);
   return { printerName, payloadLength: payload.length, dryRun: false };
@@ -108,7 +109,7 @@ if (require.main === module) {
       }
 
       if (result.dryRun) {
-        console.log(`Dry run complete. Printer: ${result.printerName} | Payload bytes: ${result.payloadLength}`);
+        console.log(`Dry run complete. Payload bytes: ${result.payloadLength}`);
         return;
       }
 

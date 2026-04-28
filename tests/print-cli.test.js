@@ -105,3 +105,18 @@ test("main prints on linux using injected printRaw", async () => {
   assert.equal(result.dryRun, false);
 });
 
+test("main dry-run works on unsupported platforms without printer discovery", async () => {
+  const result = await main(
+    ["--dry-run", "--markdown=# hi"],
+    {
+      platform: () => "darwin",
+      listPrinters: async () => {
+        throw new Error("should not list printers in dry-run");
+      }
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.equal(typeof result.payloadLength, "number");
+});
+
