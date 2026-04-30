@@ -48,6 +48,7 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--markdown-file"), true);
   assert.equal(text.includes("--dry-run"), true);
   assert.equal(text.includes("--strict-markdown"), true);
+  assert.equal(text.includes("--printer-uri"), true);
 });
 
 test("formatHelp includes posprint usage", () => {
@@ -63,8 +64,12 @@ test("validatePlatform passes on linux", () => {
   assert.doesNotThrow(() => validatePlatform("linux"));
 });
 
+test("validatePlatform passes on darwin", () => {
+  assert.doesNotThrow(() => validatePlatform("darwin"));
+});
+
 test("validatePlatform throws on unsupported platform", () => {
-  assert.throws(() => validatePlatform("darwin"), /Unsupported platform/);
+  assert.throws(() => validatePlatform("freebsd"), /Unsupported platform/);
 });
 
 test("main returns help mode when --help flag is present", async () => {
@@ -109,7 +114,7 @@ test("main dry-run works on unsupported platforms without printer discovery", as
   const result = await main(
     ["--dry-run", "--markdown=# hi"],
     {
-      platform: () => "darwin",
+      platform: () => "freebsd",
       listPrinters: async () => {
         throw new Error("should not list printers in dry-run");
       }
@@ -118,5 +123,34 @@ test("main dry-run works on unsupported platforms without printer discovery", as
 
   assert.equal(result.dryRun, true);
   assert.equal(typeof result.payloadLength, "number");
+});
+
+test("main prints via printer-uri path and skips listPrinters", async () => {
+  let uriCall = null;
+
+  const result = await main(
+    ["--markdown=# hi", "--printer=ignored", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"],
+    {
+      platform: () => "darwin",
+      listPrinters: async () => {
+        throw new Error("should not list printers when --printer-uri is set");
+      },
+      printRawToPrinterUri: async (uri, data) => {
+        uriCall = { uri, bytes: data.length };
+      }
+    }
+  );
+
+  assert.equal(result.printerName, null);
+  assert.equal(result.printerUri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(typeof uriCall.bytes, "number");
+});
+
+test("main rejects http printer-uri", async () => {
+  await assert.rejects(
+    () => main(["--markdown=# hi", "--printer-uri=http://taiga.local:631/printers/TM-T88V"]),
+    /Use ipp:\/\/ or ipps:\/\//
+  );
 });
 
