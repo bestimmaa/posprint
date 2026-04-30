@@ -4,7 +4,7 @@
 const os = require("os");
 const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
-const { markdownToEscpos, listPrinters, printRaw, selectPrinterName } = require("./index");
+const { markdownToEscpos, listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -15,6 +15,7 @@ function formatHelp() {
     "  --markdown-file=<path>   Read markdown from file",
     "  --markdown=<text>        Read markdown inline",
     "  --printer=<name>         Select printer",
+    "  --printer-uri=<uri>      Print directly to CUPS URI (ipp://...)",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
@@ -24,8 +25,26 @@ function formatHelp() {
 }
 
 function validatePlatform(platform = os.platform()) {
-  if (platform !== "win32" && platform !== "linux") {
-    throw new Error(`Unsupported platform: ${platform}. Supported platforms are win32 and linux.`);
+  if (platform !== "win32" && platform !== "linux" && platform !== "darwin") {
+    throw new Error(`Unsupported platform: ${platform}. Supported platforms are win32, linux, and darwin.`);
+  }
+}
+
+function validatePrinterUri(printerUri) {
+  if (!printerUri) {
+    return;
+  }
+
+  let parsed;
+
+  try {
+    parsed = new URL(printerUri);
+  } catch {
+    throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
+  }
+
+  if (parsed.protocol !== "ipp:" && parsed.protocol !== "ipps:") {
+    throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
   }
 }
 
@@ -73,6 +92,10 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const platform = deps.platform || os.platform;
   const listPrintersFn = deps.listPrinters || listPrinters;
   const printRawFn = deps.printRaw || printRaw;
+  const printRawToPrinterUriFn = deps.printRawToPrinterUri || printRawToPrinterUri;
+  const printerUri = getArgValue(argv, "--printer-uri");
+
+  validatePrinterUri(printerUri);
 
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));
@@ -82,6 +105,11 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   validatePlatform(platform());
+
+  if (printerUri) {
+    await printRawToPrinterUriFn(printerUri, payload);
+    return { printerName: null, printerUri, payloadLength: payload.length, dryRun: false };
+  }
 
   const printers = await listPrintersFn();
 
@@ -99,7 +127,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   return { printerName, payloadLength: payload.length, dryRun: false };
 }
 
-module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform };
+module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform, validatePrinterUri };
 
 if (require.main === module) {
   main().then(
