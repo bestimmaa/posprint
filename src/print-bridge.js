@@ -5,8 +5,8 @@ const windows = require("./windows-raw-printer");
 const linux = require("./linux-cups-printer");
 
 function assertSupportedPlatform(platform) {
-  if (platform !== "win32" && platform !== "linux") {
-    throw new Error(`Unsupported platform: ${platform}. Supported platforms are win32 and linux.`);
+  if (platform !== "win32" && platform !== "linux" && platform !== "darwin") {
+    throw new Error(`Unsupported platform: ${platform}. Supported platforms are win32, linux, and darwin.`);
   }
 }
 
@@ -33,7 +33,18 @@ function createPrintBridge({ platform = os.platform, windows: win = windows, lin
     return lin.printRawToLinuxPrinter(printerName, data);
   }
 
-  return { listPrinters, printRaw };
+  async function printRawToPrinterUri(printerUri, data) {
+    const platformName = platform();
+    assertSupportedPlatform(platformName);
+
+    if (platformName === "win32") {
+      throw new Error("Printer URI mode is not supported on win32.");
+    }
+
+    return lin.printRawToPrinterUri(printerUri, data);
+  }
+
+  return { listPrinters, printRaw, printRawToPrinterUri };
 }
 
 const defaultBridge = createPrintBridge();
@@ -41,5 +52,6 @@ const defaultBridge = createPrintBridge();
 module.exports = {
   createPrintBridge,
   listPrinters: (...args) => defaultBridge.listPrinters(...args),
-  printRaw: (...args) => defaultBridge.printRaw(...args)
+  printRaw: (...args) => defaultBridge.printRaw(...args),
+  printRawToPrinterUri: (...args) => defaultBridge.printRawToPrinterUri(...args)
 };
