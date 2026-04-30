@@ -30,9 +30,9 @@ function validatePlatform(platform = os.platform()) {
   }
 }
 
-function validatePrinterUri(printerUri) {
+function validatePrinterUri(printerUri, { warn = (message) => console.warn(message) } = {}) {
   if (!printerUri) {
-    return;
+    return printerUri;
   }
 
   let parsed;
@@ -43,9 +43,18 @@ function validatePrinterUri(printerUri) {
     throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
   }
 
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    const convertedProtocol = parsed.protocol === "http:" ? "ipp:" : "ipps:";
+    const convertedUri = `${convertedProtocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
+    warn(`--printer-uri auto-converted from ${parsed.protocol}// to ${convertedProtocol}// for CUPS printing.`);
+    parsed = new URL(convertedUri);
+  }
+
   if (parsed.protocol !== "ipp:" && parsed.protocol !== "ipps:") {
     throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
   }
+
+  return parsed.toString();
 }
 
 async function resolveMarkdownInput({ argv }) {
@@ -93,9 +102,9 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const listPrintersFn = deps.listPrinters || listPrinters;
   const printRawFn = deps.printRaw || printRaw;
   const printRawToPrinterUriFn = deps.printRawToPrinterUri || printRawToPrinterUri;
-  const printerUri = getArgValue(argv, "--printer-uri");
-
-  validatePrinterUri(printerUri);
+  const printerUriRaw = getArgValue(argv, "--printer-uri");
+  const warn = deps.warn || ((message) => console.warn(message));
+  const printerUri = validatePrinterUri(printerUriRaw, { warn });
 
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));

@@ -110,7 +110,7 @@ Flags:
 - `--markdown-file=<path>`: Read receipt content from a markdown file.
 - `--markdown="..."`: Pass markdown inline as a single argument.
 - `--printer="Printer Name"`: Target an exact local printer queue.
-- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`).
+- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.

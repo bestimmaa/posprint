@@ -147,10 +147,25 @@ test("main prints via printer-uri path and skips listPrinters", async () => {
   assert.equal(typeof uriCall.bytes, "number");
 });
 
-test("main rejects http printer-uri", async () => {
-  await assert.rejects(
-    () => main(["--markdown=# hi", "--printer-uri=http://taiga.local:631/printers/TM-T88V"]),
-    /Use ipp:\/\/ or ipps:\/\//
+test("main auto-converts http printer-uri to ipp", async () => {
+  let uriCall = null;
+  const warnings = [];
+
+  const result = await main(
+    ["--markdown=# hi", "--printer-uri=http://taiga.local:631/printers/TM-T88V"],
+    {
+      platform: () => "darwin",
+      warn: (message) => warnings.push(message),
+      printRawToPrinterUri: async (uri, data) => {
+        uriCall = { uri, bytes: data.length };
+      }
+    }
   );
+
+  assert.equal(result.printerUri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(typeof uriCall.bytes, "number");
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /auto-converted/i);
 });
 
