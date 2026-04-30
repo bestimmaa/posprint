@@ -108,3 +108,11 @@ test("readme documents bitbucket pipeline and build artifacts", () => {
     true
   );
 });
+
+test("readme documents linux cups raw printing", () => {
+  assert.equal(readme.includes("Linux"), true);
+  assert.equal(readme.includes("CUPS"), true);
+  assert.equal(readme.includes("lp"), true);
+  assert.equal(readme.includes("lpr"), true);
+  assert.equal(readme.includes("raw mode"), true);
+});
