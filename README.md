@@ -1,6 +1,6 @@
 # posprint
 
-`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V, supporting Windows RAW spooler and Linux CUPS raw printing, with practical workflows for conversion-only and real print jobs.
+`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V, supporting Windows RAW spooler and Linux/macOS CUPS raw printing, with practical workflows for conversion-only and real print jobs.
 
 ## Install
 
@@ -30,7 +30,7 @@ Dry run from the test fixture (build payload and select printer, no print job):
 posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md"
 ```
 
-Send a real print job to a specific printer queue (Windows or Linux):
+Send a real print job to a specific printer queue (Windows, Linux, or macOS):
 
 ```bash
 posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON TM-T88V Receipt (USB)"
@@ -62,6 +62,17 @@ printReceipt().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });
+```
+
+Direct CUPS URI printing (linux/macOS):
+
+```js
+const { markdownToEscpos, printRawToPrinterUri } = require("posprint");
+
+const markdown = "# Hello\n\n- Espresso";
+const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
+
+await printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from(escpos));
 ```
 
 Conversion only (build ESC/POS bytes without sending a print job):
@@ -98,7 +109,8 @@ Flags:
 
 - `--markdown-file=<path>`: Read receipt content from a markdown file.
 - `--markdown="..."`: Pass markdown inline as a single argument.
-- `--printer="Printer Name"`: Target an exact printer queue.
+- `--printer="Printer Name"`: Target an exact local printer queue.
+- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`).
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.
@@ -144,6 +156,15 @@ Print from file to the USB receipt queue:
 ```bash
 posprint --markdown-file="tests/fixtures/markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
+
+Print directly to a remote CUPS queue via URI:
+
+```bash
+posprint --markdown-file="tests/fixtures/markdown-showcase.md" \
+  --printer-uri="ipp://taiga.local:631/printers/TM-T88V"
+```
+
+Note: `http://...` URLs are CUPS web UI endpoints. For printing, use `ipp://...` or `ipps://...`.
 
 Validate markdown strictly before printing:
 
@@ -192,12 +213,13 @@ Project scripts for ESC/POS and spooler verification:
 - Printer queue available to the current user session.
 - RAW printing enabled through the Windows spooler path.
 
-## Linux Requirements
+## Linux/macOS Requirements
 
-- Linux machine with Node.js 20+.
+- Linux or macOS machine with Node.js 20+.
 - CUPS client tooling installed (`lpstat`, `lp`, and/or `lpr`).
-- Printer queue available to the current user session.
-- ESC/POS is sent in raw mode (`lp -o raw`, fallback `lpr -o raw`).
+- Local queue printing uses discovered queues from the current user session.
+- URI printing uses CUPS `lp` with raw mode (for example: `lp -h host:port -d queue -o raw`).
+- ESC/POS is sent in raw mode.
 
 ## License
 
