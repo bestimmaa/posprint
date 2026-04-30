@@ -65,6 +65,31 @@ function isCommandMissing(error) {
   );
 }
 
+function parsePrinterUri(printerUri) {
+  let uri;
+
+  try {
+    uri = new URL(printerUri);
+  } catch {
+    throw new Error("Invalid printer URI. Use ipp://host:port/printers/queue.");
+  }
+
+  if (uri.protocol !== "ipp:" && uri.protocol !== "ipps:") {
+    throw new Error("Unsupported printer URI scheme. Use ipp:// or ipps://.");
+  }
+
+  const match = uri.pathname.match(/^\/printers\/([^/]+)$/);
+
+  if (!match) {
+    throw new Error("Unsupported printer URI path. Expected /printers/<queue>.");
+  }
+
+  return {
+    hostPort: uri.port ? `${uri.hostname}:${uri.port}` : uri.hostname,
+    queueName: decodeURIComponent(match[1])
+  };
+}
+
 async function printRawToLinuxPrinter(printerName, data, { spawn = spawnProcess } = {}) {
   if (!Buffer.isBuffer(data)) {
     throw new TypeError("data must be a Buffer");
@@ -83,8 +108,21 @@ async function printRawToLinuxPrinter(printerName, data, { spawn = spawnProcess 
   return { command: "lpr", printerName };
 }
 
+async function printRawToPrinterUri(printerUri, data, { spawn = spawnProcess } = {}) {
+  if (!Buffer.isBuffer(data)) {
+    throw new TypeError("data must be a Buffer");
+  }
+
+  const { hostPort, queueName } = parsePrinterUri(printerUri);
+  await runCommand("lp", ["-h", hostPort, "-d", queueName, "-o", "raw"], { input: data, spawn });
+
+  return { command: "lp", printerUri, printerName: queueName };
+}
+
 module.exports = {
   parseLpstatPrinters,
+  parsePrinterUri,
   listPrintersLinux,
-  printRawToLinuxPrinter
+  printRawToLinuxPrinter,
+  printRawToPrinterUri
 };

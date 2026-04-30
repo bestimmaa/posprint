@@ -5,8 +5,10 @@ const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const {
   parseLpstatPrinters,
+  parsePrinterUri,
   listPrintersLinux,
-  printRawToLinuxPrinter
+  printRawToLinuxPrinter,
+  printRawToPrinterUri
 } = require("../src/linux-cups-printer");
 
 function mockSpawnFactory(handlers) {
@@ -88,4 +90,42 @@ test("printRawToLinuxPrinter falls back to lpr when lp missing", async () => {
 
   const result = await printRawToLinuxPrinter("EPSON_TM_T88V", Buffer.from("x"), { spawn });
   assert.equal(result.command, "lpr");
+});
+
+test("parsePrinterUri accepts ipp URI and returns host/queue", () => {
+  const parsed = parsePrinterUri("ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(parsed.hostPort, "taiga.local:631");
+  assert.equal(parsed.queueName, "TM-T88V");
+});
+
+test("parsePrinterUri rejects http URI with helpful message", () => {
+  assert.throws(
+    () => parsePrinterUri("http://taiga.local:631/printers/TM-T88V"),
+    /Use ipp:\/\/ or ipps:\/\//
+  );
+});
+
+test("printRawToPrinterUri uses lp -h host:port -d queue -o raw", async () => {
+  let seen = null;
+  const spawn = (cmd, args) => {
+    seen = { cmd, args };
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = { write() {}, end() {} };
+    queueMicrotask(() => child.emit("close", 0));
+    return child;
+  };
+
+  const result = await printRawToPrinterUri(
+    "ipp://taiga.local:631/printers/TM-T88V",
+    Buffer.from([0x1b, 0x40]),
+    { spawn }
+  );
+
+  assert.deepEqual(seen, {
+    cmd: "lp",
+    args: ["-h", "taiga.local:631", "-d", "TM-T88V", "-o", "raw"]
+  });
+  assert.equal(result.command, "lp");
 });
