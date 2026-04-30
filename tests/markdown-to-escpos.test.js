@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { markdownToEscpos, wrapText } = require("../src/markdown-to-escpos");
-const { rasterImage } = require("../src/escpos-builder");
+const { rasterImage, qrCode } = require("../src/escpos-builder");
 const {
   imageFileToRaster,
   resolveMarkdownImagePath,
@@ -24,6 +24,28 @@ test("builds GS v 0 raster command with expected header", () => {
   assert.equal(out[6], 0x01);
   assert.equal(out[7], 0x00);
   assert.equal(out[8], 0b10101010);
+});
+
+test("builds native GS ( k QR command sequence", () => {
+  const out = Buffer.from(qrCode({ payload: "HELLO", size: 6, ec: "M" }));
+
+  assert.equal(out.includes(Buffer.from([0x1d, 0x28, 0x6b])), true);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, 0x06])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30])), -1);
+});
+
+test("qrCode rejects empty payload", () => {
+  assert.throws(() => qrCode({ payload: "", size: 6, ec: "M" }), /QR payload must not be empty/);
+});
+
+test("qrCode rejects invalid size", () => {
+  assert.throws(() => qrCode({ payload: "A", size: 0, ec: "M" }), /QR size must be an integer between 1 and 16/);
+});
+
+test("qrCode rejects invalid error correction", () => {
+  assert.throws(() => qrCode({ payload: "A", size: 6, ec: "Z" }), /QR ec must be one of L, M, Q, H/);
 });
 
 test("resolves relative markdown image path from current working directory", () => {
@@ -100,6 +122,62 @@ test("fails when markdown image file is missing", () => {
     () => markdownToEscpos("![logo](tests/fixtures/does-not-exist.png)", { charsPerLine: 42, strictMarkdown: false }),
     /Unable to read image/
   );
+});
+
+test("renders valid qr shortcode as centered native qr command", () => {
+  const out = Buffer.from(markdownToEscpos("before {{qr:HELLO|size=6|ec=M}} after", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+
+  assert.notEqual(out.indexOf(Buffer.from("before")), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1b, 0x61, 0x01])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b])), -1);
+  assert.notEqual(out.lastIndexOf(Buffer.from([0x1b, 0x61, 0x00])), -1);
+  assert.notEqual(out.indexOf(Buffer.from("after")), -1);
+});
+
+test("renders qr shortcode with https URL payload", () => {
+  const out = Buffer.from(markdownToEscpos("{{qr:https://www.northwind.com/rewards|size=6|ec=M}}", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b])), -1);
+  assert.equal(out.includes(Buffer.from("{{qr:")), false);
+});
+
+test("strict mode rejects invalid qr ec", () => {
+  assert.throws(
+    () => markdownToEscpos("{{qr:HELLO|ec=Z}}", { charsPerLine: 42, strictMarkdown: true }),
+    /Invalid QR shortcode/
+  );
+});
+
+test("strict mode rejects unknown qr option", () => {
+  assert.throws(
+    () => markdownToEscpos("{{qr:HELLO|foo=bar}}", { charsPerLine: 42, strictMarkdown: true }),
+    /Invalid QR shortcode/
+  );
+});
+
+test("best-effort mode warns and prints invalid qr shortcode literally", () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(" "));
+
+  try {
+    const out = Buffer.from(markdownToEscpos("x {{qr:HELLO|ec=Z}} y", {
+      charsPerLine: 42,
+      strictMarkdown: false
+    }));
+    const text = out.toString("utf8");
+
+    assert.equal(warnings.length > 0, true);
+    assert.equal(text.includes("{{qr:HELLO|ec=Z}}"), true);
+  } finally {
+    console.warn = originalWarn;
+  }
 });
 
 test("renders # heading with centered bold extra-large style sequence", () => {

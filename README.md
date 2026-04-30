@@ -130,6 +130,32 @@ Flags:
 - Images smaller than paper keep natural size and are centered.
 - Missing/invalid/unsupported images fail the command with an error.
 
+## Native QR Codes
+
+`posprint` supports native ESC/POS QR codes via inline shortcode syntax:
+
+```md
+{{qr:https://example.com|size=6|ec=M}}
+```
+
+Example inside receipt markdown (text payload):
+
+```md
+## Loyalty
+Scan to join rewards:
+{{qr:NORTHWIND-LOYALTY-2026|size=6|ec=M}}
+```
+
+Options:
+
+- `size` (`1`-`16`, default `6`)
+- `ec` (`L`, `M`, `Q`, `H`, default `M`)
+
+Validation behavior:
+
+- `--strict-markdown`: invalid QR shortcodes fail the command.
+- Default best-effort mode: invalid QR shortcodes print a warning and are rendered literally.
+
 Printer selection order:
 
 1. `--printer`

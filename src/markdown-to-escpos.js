@@ -13,7 +13,8 @@ const {
   text,
   feed,
   cut,
-  rasterImage
+  rasterImage,
+  qrCode
 } = require("./escpos-builder");
 const { imageTokenToRaster } = require("./image-to-escpos");
 
@@ -80,6 +81,87 @@ function renderLink(label, href) {
     return cleanLabel;
   }
   return `${cleanLabel} (${cleanHref})`;
+}
+
+function parseQrShortcode(raw) {
+  const full = String(raw || "");
+  const inner = full.slice(2, -2);
+
+  if (!inner.startsWith("qr:")) {
+    throw new Error("missing qr: prefix");
+  }
+
+  const body = inner.slice(3);
+  const parts = body.split("|");
+  const payload = String(parts.shift() || "").trim();
+
+  if (!payload) {
+    throw new Error("payload is required");
+  }
+
+  const options = { size: 6, ec: "M" };
+
+  for (const part of parts) {
+    const idx = part.indexOf("=");
+    if (idx <= 0) {
+      throw new Error(`invalid option: ${part}`);
+    }
+
+    const key = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+
+    if (key === "size") {
+      const size = Number(value);
+      if (!Number.isInteger(size) || size < 1 || size > 16) {
+        throw new Error("size must be an integer between 1 and 16");
+      }
+      options.size = size;
+      continue;
+    }
+
+    if (key === "ec") {
+      const ec = value.toUpperCase();
+      if (!["L", "M", "Q", "H"].includes(ec)) {
+        throw new Error("ec must be one of L, M, Q, H");
+      }
+      options.ec = ec;
+      continue;
+    }
+
+    throw new Error(`unknown option: ${part}`);
+  }
+
+  return { payload, size: options.size, ec: options.ec };
+}
+
+function scanTextForQrShortcodes(value) {
+  const textValue = String(value || "");
+  const out = [];
+  let cursor = 0;
+
+  while (cursor < textValue.length) {
+    const start = textValue.indexOf("{{qr:", cursor);
+
+    if (start === -1) {
+      out.push({ type: "text", value: textValue.slice(cursor) });
+      break;
+    }
+
+    if (start > cursor) {
+      out.push({ type: "text", value: textValue.slice(cursor, start) });
+    }
+
+    const end = textValue.indexOf("}}", start + 5);
+    if (end === -1) {
+      out.push({ type: "text", value: textValue.slice(start) });
+      break;
+    }
+
+    out.push({ type: "qr", raw: textValue.slice(start, end + 2) });
+    cursor = end + 2;
+  }
+
+  return out;
 }
 
 function collectInlineRange(children, startIndex, openType, closeType) {
@@ -416,6 +498,7 @@ function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, p
 
 function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, prefix = "") {
   const buffered = [];
+  const inlineChildren = Array.isArray(children) ? children : [];
 
   function flushBuffered() {
     if (!buffered.length) {
@@ -426,21 +509,106 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
     buffered.length = 0;
   }
 
-  for (const token of children || []) {
-    if (token.type !== "image") {
-      buffered.push(token);
+  function consumeSpanningQrShortcode(startIndex) {
+    const token = inlineChildren[startIndex];
+    if (!token || (token.type !== "text" && token.type !== "code_inline")) {
+      return null;
+    }
+
+    const value = String(token.content || "");
+    const start = value.indexOf("{{qr:");
+    if (start === -1) {
+      return null;
+    }
+
+    if (value.indexOf("}}", start + 5) !== -1) {
+      return { content: value, endIndex: startIndex };
+    }
+
+    let combined = value;
+
+    for (let index = startIndex + 1; index < inlineChildren.length; index += 1) {
+      const next = inlineChildren[index];
+
+      if (!next) {
+        break;
+      }
+
+      if (next.type === "link_open" || next.type === "link_close") {
+        if (combined.indexOf("}}", start + 5) !== -1) {
+          return { content: combined, endIndex: index };
+        }
+        continue;
+      }
+
+      if (next.type !== "text" && next.type !== "code_inline") {
+        break;
+      }
+
+      combined += String(next.content || "");
+
+      if (combined.indexOf("}}", start + 5) !== -1) {
+        return { content: combined, endIndex: index };
+      }
+    }
+
+    return null;
+  }
+
+  for (let i = 0; i < inlineChildren.length; i += 1) {
+    const token = inlineChildren[i];
+
+    if (token.type === "image") {
+      flushBuffered();
+
+      const src = token.attrGet("src");
+      const raster = imageTokenToRaster({ src, charsPerLine, threshold: 128 });
+
+      chunks.push(align("center"));
+      chunks.push(rasterImage(raster));
+      chunks.push(text("\n"));
+      chunks.push(align("left"));
       continue;
     }
 
-    flushBuffered();
+    if (token.type === "text" || token.type === "code_inline") {
+      const spanning = consumeSpanningQrShortcode(i);
+      const source = spanning ? spanning.content : String(token.content || "");
+      if (spanning) {
+        i = spanning.endIndex;
+      }
 
-    const src = token.attrGet("src");
-    const raster = imageTokenToRaster({ src, charsPerLine, threshold: 128 });
+      const parts = scanTextForQrShortcodes(source);
 
-    chunks.push(align("center"));
-    chunks.push(rasterImage(raster));
-    chunks.push(text("\n"));
-    chunks.push(align("left"));
+      for (const part of parts) {
+        if (part.type === "text") {
+          if (part.value) {
+            buffered.push({ ...token, type: "text", content: part.value });
+          }
+          continue;
+        }
+
+        flushBuffered();
+
+        try {
+          const parsed = parseQrShortcode(part.raw);
+          chunks.push(align("center"));
+          chunks.push(qrCode(parsed));
+          chunks.push(text("\n"));
+          chunks.push(align("left"));
+        } catch (error) {
+          const message = `Invalid QR shortcode "${part.raw}": ${error.message}`;
+          if (strictMarkdown) {
+            throw new Error(message);
+          }
+          console.warn(message);
+          buffered.push({ ...token, type: "text", content: part.raw });
+        }
+      }
+      continue;
+    }
+
+    buffered.push(token);
   }
 
   flushBuffered();
@@ -448,6 +616,15 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
 
 function childrenContainImage(children) {
   return Array.isArray(children) && children.some((token) => token.type === "image");
+}
+
+function childrenContainQrShortcode(children) {
+  return Array.isArray(children) && children.some((token) => {
+    if (token.type !== "text" && token.type !== "code_inline") {
+      return false;
+    }
+    return String(token.content || "").includes("{{qr:");
+  });
 }
 
 function normalizeTaskMarkersInSegments(segments) {
@@ -512,8 +689,9 @@ function markdownToEscpos(markdown, options = {}) {
       if (listItemDepth > 0) {
         const currentListItem = listItemStack[listItemStack.length - 1];
         const hasImage = childrenContainImage(children);
+        const hasQrShortcode = childrenContainQrShortcode(children);
 
-        if (hasImage) {
+        if (hasImage || hasQrShortcode) {
           if (currentListItem && !currentListItem.hasRenderedContent) {
             const indent = getListIndent(listItemDepth);
             chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));

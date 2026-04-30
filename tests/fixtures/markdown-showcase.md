@@ -44,6 +44,9 @@ This section intentionally mixes supported markdown features in a compact form.
 
 ![Northwind Logo](tests/fixtures/logo-small.png)
 
+Scan for rewards signup:
+{{qr:https://www.northwind.com/rewards|size=6|ec=M}}
+
 - Long wrap sample: the quick brown fox jumps over the very patient thermal printer while line wrapping keeps words readable on narrow paper.
 - Inline code: use `--chars-per-line=42` for standard TM-T88V width.
 
