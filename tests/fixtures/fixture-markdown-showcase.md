@@ -42,7 +42,7 @@ Visit [Northwind Menu](https://example.com/menu)
 
 This section intentionally mixes supported markdown features in a compact form.
 
-![Northwind Logo](tests/fixtures/logo-small.png)
+![Northwind Logo](tests/fixtures/fixture-image-logo-small.png)
 
 Scan for rewards signup:
 {{qr:https://www.northwind.com/rewards|size=6|ec=M}}

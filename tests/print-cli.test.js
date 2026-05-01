@@ -29,7 +29,7 @@ test("selectPrinterName prioritizes explicit flag", () => {
 });
 
 test("resolveMarkdownInput prefers markdown-file over markdown string", async () => {
-  const fixturePath = path.resolve(__dirname, "fixtures", "markdown-basic.md");
+  const fixturePath = path.resolve(__dirname, "fixtures", "fixture-markdown-basic.md");
   const input = await resolveMarkdownInput({
     argv: [`--markdown-file=${fixturePath}`, "--markdown=ignored"]
   });
@@ -80,13 +80,31 @@ test("validatePlatform throws on unsupported platform", () => {
 });
 
 test("main returns help mode when --help flag is present", async () => {
-  const result = await main(["--help"]);
-  assert.equal(result.mode, "help");
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (value) => lines.push(String(value));
+
+  try {
+    const result = await main(["--help"]);
+    assert.equal(result.mode, "help");
+    assert.equal(lines.some((line) => line.includes("Usage: posprint [options]")), true);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test("main returns version mode when --version flag is present", async () => {
-  const result = await main(["--version"]);
-  assert.equal(result.mode, "version");
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (value) => lines.push(String(value));
+
+  try {
+    const result = await main(["--version"]);
+    assert.equal(result.mode, "version");
+    assert.equal(lines.some((line) => /^\d+\.\d+\.\d+/.test(line)), true);
+  } finally {
+    console.log = originalLog;
+  }
 });
 
 test("main returns list-code-pages mode and prints ids plus canonical names", async () => {

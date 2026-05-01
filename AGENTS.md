@@ -48,7 +48,7 @@ This repository provides `posprint`: a Node.js module + CLI for markdown-to-ESC/
 - CLI help: `npm run print -- --help`
 - Dry-run fixture: `npm run print:test:dry`
 - Submit fixture to local queue: `npm run print:test -- --printer="EPSON TM-T88V Receipt (USB)"`
-- Dry-run from file: `npm run print:dry -- --markdown-file="tests/fixtures/markdown-showcase.md"`
+- Dry-run from file: `npm run print:dry -- --markdown-file="tests/fixtures/fixture-markdown-showcase.md"`
 - Optional env printer override: `ESC_POS_PRINTER`
 
 ## Validation Notes

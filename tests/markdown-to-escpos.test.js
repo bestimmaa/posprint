@@ -86,8 +86,8 @@ test("qrCode rejects invalid error correction", () => {
 });
 
 test("resolves relative markdown image path from current working directory", () => {
-  const filePath = resolveMarkdownImagePath("tests/fixtures/logo-small.png");
-  assert.equal(filePath, path.resolve(process.cwd(), "tests/fixtures/logo-small.png"));
+  const filePath = resolveMarkdownImagePath("tests/fixtures/fixture-image-logo-small.png");
+  assert.equal(filePath, path.resolve(process.cwd(), "tests/fixtures/fixture-image-logo-small.png"));
 });
 
 test("accepts png and jpg extensions case-insensitively", () => {
@@ -102,7 +102,7 @@ test("rejects unsupported image extension", () => {
 
 test("converts png fixture to monochrome raster", () => {
   const result = imageFileToRaster({
-    filePath: path.resolve("tests/fixtures/logo-small.png"),
+    filePath: path.resolve("tests/fixtures/fixture-image-logo-small.png"),
     charsPerLine: 42,
     threshold: 128
   });
@@ -113,7 +113,7 @@ test("converts png fixture to monochrome raster", () => {
 
 test("converts jpg fixture to monochrome raster", () => {
   const result = imageFileToRaster({
-    filePath: path.resolve("tests/fixtures/logo-small.jpg"),
+    filePath: path.resolve("tests/fixtures/fixture-image-logo-small.jpg"),
     charsPerLine: 42,
     threshold: 128
   });
@@ -124,7 +124,7 @@ test("converts jpg fixture to monochrome raster", () => {
 
 test("clamps oversized image width to printable dots", () => {
   const result = imageFileToRaster({
-    filePath: path.resolve("tests/fixtures/logo-wide.png"),
+    filePath: path.resolve("tests/fixtures/fixture-image-logo-wide.png"),
     charsPerLine: 42,
     threshold: 128
   });
@@ -133,7 +133,7 @@ test("clamps oversized image width to printable dots", () => {
 
 test("keeps natural size for image smaller than printable width", () => {
   const result = imageFileToRaster({
-    filePath: path.resolve("tests/fixtures/logo-small.png"),
+    filePath: path.resolve("tests/fixtures/fixture-image-logo-small.png"),
     charsPerLine: 42,
     threshold: 128
   });
@@ -141,7 +141,7 @@ test("keeps natural size for image smaller than printable width", () => {
 });
 
 test("renders markdown image token as centered raster image", () => {
-  const out = Buffer.from(markdownToEscpos("![logo](tests/fixtures/logo-small.png)", {
+  const out = Buffer.from(markdownToEscpos("![logo](tests/fixtures/fixture-image-logo-small.png)", {
     charsPerLine: 42,
     strictMarkdown: false
   }));
@@ -316,7 +316,7 @@ test("encodes representative western characters using cp850 bytes", () => {
 });
 
 test("fixture with western chars encodes expected cp850 bytes", () => {
-  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "markdown-codepage-western.md"), "utf8");
+  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "fixture-markdown-codepage-western.md"), "utf8");
   const out = Buffer.from(markdownToEscpos(markdown, {
     charsPerLine: 42,
     strictMarkdown: false,
@@ -328,8 +328,8 @@ test("fixture with western chars encodes expected cp850 bytes", () => {
   }
 });
 
-test("magic fixture prints italic sections and normalizes smart quotes on cp850", () => {
-  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "magic.md"), "utf8");
+test("magic-smart-quotes-italic fixture prints italic sections and normalizes smart quotes on cp850", () => {
+  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "fixture-markdown-magic-smart-quotes-italic.md"), "utf8");
   const out = Buffer.from(markdownToEscpos(markdown, {
     charsPerLine: 42,
     strictMarkdown: false,

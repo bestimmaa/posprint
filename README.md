@@ -227,6 +227,11 @@ Default code page:
 
 - `cp858` (ESC/POS `ESC t 19`)
 
+Repository validation convention:
+
+- For fixture-level validation checks in this repository, prefer `cp850` so expected Western bytes are explicit and repeatable across tests/fixtures.
+- Runtime default remains `cp858` unless you pass `--code-page` (CLI) or `codePage` (module).
+
 CLI:
 
 - `--code-page=cp858`
@@ -274,7 +279,7 @@ posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant" --chars-per-l
 Dry run with global layout controls:
 
 ```bash
-posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md" \
+posprint --dry-run --markdown-file="tests/fixtures/fixture-markdown-showcase.md" \
   --font=B --character-spacing-mm=1 --line-spacing-mm=3 --left-margin-mm=2 --print-area-width-mm=42
 ```
 
@@ -287,13 +292,13 @@ posprint --dry-run --markdown "# Shift Open`n`n- Till: 3`n- Cashier: Sam"
 Print from file to the USB receipt queue:
 
 ```bash
-posprint --markdown-file="tests/fixtures/markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
+posprint --markdown-file="tests/fixtures/fixture-markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
 Print directly to a remote CUPS queue via URI:
 
 ```bash
-posprint --markdown-file="tests/fixtures/markdown-showcase.md" \
+posprint --markdown-file="tests/fixtures/fixture-markdown-showcase.md" \
   --printer-uri="ipp://taiga.local:631/printers/TM-T88V"
 ```
 
@@ -302,15 +307,20 @@ Note: `http://...` URLs are CUPS web UI endpoints. For printing, use `ipp://...`
 Validate markdown strictly before printing:
 
 ```bash
-posprint --dry-run --markdown-file="tests/fixtures/unsupported-html.md" --strict-markdown
+posprint --dry-run --markdown-file="tests/fixtures/fixture-markdown-unsupported-html.md" --strict-markdown
 ```
 
 Use environment override for printer selection:
 
 ```powershell
 $env:ESC_POS_PRINTER="EPSON TM-T88V Receipt (USB)"
-posprint --markdown-file="tests/fixtures/markdown-showcase.md"
+posprint --markdown-file="tests/fixtures/fixture-markdown-showcase.md"
 ```
+
+Fixture naming convention (tests/fixtures):
+
+- Markdown fixtures: `fixture-markdown-<purpose>.md`
+- Image fixtures: `fixture-image-<purpose>.<ext>`
 
 ## Development
 
@@ -328,8 +338,8 @@ npm test
 
 Project scripts for ESC/POS and spooler verification:
 
-- `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` and `--dry-run`.
-- `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` to submit a RAW print job.
+- `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/fixture-markdown-showcase.md` and `--dry-run`.
+- `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/fixture-markdown-showcase.md` to submit a RAW print job.
 
 Release helper script:
 
