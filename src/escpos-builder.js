@@ -47,6 +47,10 @@ function bold(enabled) {
   return byte(0x1b, 0x45, enabled ? 1 : 0);
 }
 
+function italic(enabled) {
+  return enabled ? byte(0x1b, 0x34) : byte(0x1b, 0x35);
+}
+
 function size(width = 0, height = 0) {
   const w = Math.max(0, Math.min(7, width));
   const h = Math.max(0, Math.min(7, height));
@@ -200,6 +204,7 @@ module.exports = {
   setCodePage,
   align,
   bold,
+  italic,
   size,
   line,
   feed,

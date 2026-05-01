@@ -9,6 +9,7 @@ const {
   rasterImage,
   qrCode,
   font,
+  italic,
   characterSpacing,
   lineSpacing,
   leftMargin,
@@ -49,6 +50,11 @@ test("builds ESC M font command bytes for A/B/C", () => {
   assert.deepEqual(Array.from(font("A")), [0x1b, 0x4d, 0x00]);
   assert.deepEqual(Array.from(font("B")), [0x1b, 0x4d, 0x01]);
   assert.deepEqual(Array.from(font("C")), [0x1b, 0x4d, 0x02]);
+});
+
+test("builds ESC 4/5 italic command bytes", () => {
+  assert.deepEqual(Array.from(italic(true)), [0x1b, 0x34]);
+  assert.deepEqual(Array.from(italic(false)), [0x1b, 0x35]);
 });
 
 test("builds ESC SP character spacing command bytes", () => {
@@ -322,6 +328,22 @@ test("fixture with western chars encodes expected cp850 bytes", () => {
   }
 });
 
+test("magic fixture prints italic sections and normalizes smart quotes on cp850", () => {
+  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "magic.md"), "utf8");
+  const out = Buffer.from(markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp850"
+  }));
+
+  const italicOn = Buffer.from([0x1b, 0x34]);
+  const italicOff = Buffer.from([0x1b, 0x35]);
+
+  assert.notEqual(out.indexOf(italicOn), -1);
+  assert.notEqual(out.indexOf(italicOff), -1);
+  assert.equal(out.includes(Buffer.from('"Strange times make for strange allies."', "ascii")), true);
+});
+
 test("uses cp1252 ESC/POS code-page id and bytes when selected", () => {
   const out = Buffer.from(markdownToEscpos("\u201cHi\u201d", {
     charsPerLine: 42,
@@ -499,14 +521,25 @@ test("renders strong text with ESC/POS bold toggles", () => {
   assert.equal(boldTextIndex < boldOffIndex, true);
 });
 
-test("degrades emphasis and strikethrough to plain readable text", () => {
+test("renders emphasis with ESC/POS italic toggles and degrades strikethrough to plain text", () => {
   const out = Buffer.from(markdownToEscpos("This has *emphasis* and ~~strike~~ text.\n", {
     charsPerLine: 42,
     strictMarkdown: false
   }));
   const text = out.toString("utf8");
 
-  assert.equal(text.includes("emphasis"), true);
+  const italicOn = Buffer.from([0x1b, 0x34]);
+  const italicOff = Buffer.from([0x1b, 0x35]);
+  const emphasisText = Buffer.from("emphasis");
+  const italicOnIndex = out.indexOf(italicOn);
+  const emphasisIndex = out.indexOf(emphasisText);
+  const italicOffIndex = out.indexOf(italicOff);
+
+  assert.notEqual(italicOnIndex, -1);
+  assert.notEqual(emphasisIndex, -1);
+  assert.notEqual(italicOffIndex, -1);
+  assert.equal(italicOnIndex < emphasisIndex, true);
+  assert.equal(emphasisIndex < italicOffIndex, true);
   assert.equal(text.includes("strike"), true);
   assert.equal(text.includes("*emphasis*"), false);
   assert.equal(text.includes("~~strike~~"), false);

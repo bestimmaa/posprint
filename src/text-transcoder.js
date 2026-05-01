@@ -103,6 +103,8 @@ const CODE_PAGES = {
 
 function normalizeFallback(value) {
   return String(value || "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
     .replace(/[‐‑‒–—―−]/g, "-")
     .replace(/[\u202F\u00A0]*°/g, " deg")
     .replace(/[\u202F\u00A0]/g, " ");
