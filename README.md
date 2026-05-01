@@ -155,6 +155,14 @@ Flags:
 - `--help`: Show CLI usage.
 - `--version`: Show package version.
 
+## Inline Markdown Styling
+
+`posprint` supports a practical subset of inline markdown styling for receipt readability:
+
+- `**strong**` → ESC/POS bold on/off
+- `*emphasis*` → ESC/POS italic on/off
+- `~~strikethrough~~` → degrades to plain readable text (markers removed)
+
 ## Markdown Images
 
 `posprint` supports standard markdown image syntax:
@@ -230,7 +238,7 @@ Module:
 Fallback behavior for unencodable characters:
 
 1. Try direct encode in active code page.
-2. If not encodable, apply ASCII-safe normalization fallback.
+2. If not encodable, apply ASCII-safe normalization fallback (for example smart quotes `“ ” ‘ ’` → ASCII quotes).
 3. If still not encodable, emit `?`.
 
 Show supported code pages from CLI:
@@ -322,6 +330,10 @@ Project scripts for ESC/POS and spooler verification:
 
 - `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` and `--dry-run`.
 - `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` to submit a RAW print job.
+
+Release helper script:
+
+- `npm run release:commit-tag` stages `package.json`, `package-lock.json`, and `CHANGELOG.md`, creates commit `chore(release): vMAJOR.MINOR.PATCH`, and creates matching tag `vMAJOR.MINOR.PATCH` on that commit.
 
 ## Bitbucket Pipeline Artifact Build
 

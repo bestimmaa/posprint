@@ -47,6 +47,11 @@ test("encodeText keeps ASCII unchanged", () => {
   assert.deepEqual(Array.from(out), Array.from(Buffer.from("Hello-123", "ascii")));
 });
 
+test("encodeText normalizes smart quotes to ASCII quotes on cp850", () => {
+  const out = Buffer.from(encodeText("“Strange” ‘allies’", { codePage: "cp850" }));
+  assert.equal(out.includes(Buffer.from('"Strange" \'allies\'', "ascii")), true);
+});
+
 test("encodeText falls back to deterministic '?' when char is not encodable", () => {
   const out = Buffer.from(encodeText("ok λ", { codePage: "cp437" }));
   assert.equal(out.includes(Buffer.from("ok ?", "ascii")), true);

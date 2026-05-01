@@ -8,6 +8,7 @@ const {
   setCodePage,
   align,
   bold,
+  italic,
   size,
   line,
   feed,
@@ -215,14 +216,15 @@ function normalizeSegments(segments) {
     }
 
     const boldEnabled = Boolean(segment.bold);
+    const italicEnabled = Boolean(segment.italic);
     const prev = out[out.length - 1];
 
-    if (prev && prev.bold === boldEnabled) {
+    if (prev && prev.bold === boldEnabled && prev.italic === italicEnabled) {
       prev.text += value;
       continue;
     }
 
-    out.push({ text: value, bold: boldEnabled });
+    out.push({ text: value, bold: boldEnabled, italic: italicEnabled });
   }
 
   return out;
@@ -234,7 +236,7 @@ function segmentsToText(segments) {
     .join("");
 }
 
-function inlineToSegments(children, strictMarkdown = false, boldEnabled = false) {
+function inlineToSegments(children, strictMarkdown = false, boldEnabled = false, italicEnabled = false) {
   if (!Array.isArray(children) || !children.length) {
     return [];
   }
@@ -245,7 +247,7 @@ function inlineToSegments(children, strictMarkdown = false, boldEnabled = false)
     const token = children[i];
 
     if (token.type === "text" || token.type === "code_inline") {
-      out.push({ text: token.content, bold: boldEnabled });
+      out.push({ text: token.content, bold: boldEnabled, italic: italicEnabled });
       continue;
     }
 
@@ -253,40 +255,40 @@ function inlineToSegments(children, strictMarkdown = false, boldEnabled = false)
       if (strictMarkdown) {
         throw new Error(`Unsupported markdown construct: ${token.type}`);
       }
-      out.push({ text: token.content, bold: boldEnabled });
+      out.push({ text: token.content, bold: boldEnabled, italic: italicEnabled });
       continue;
     }
 
     if (token.type === "softbreak" || token.type === "hardbreak") {
-      out.push({ text: "\n", bold: boldEnabled });
+      out.push({ text: "\n", bold: boldEnabled, italic: italicEnabled });
       continue;
     }
 
     if (token.type === "strong_open") {
       const range = collectInlineRange(children, i, "strong_open", "strong_close");
-      out.push(...inlineToSegments(range.inner, strictMarkdown, true));
+      out.push(...inlineToSegments(range.inner, strictMarkdown, true, italicEnabled));
       i = range.endIndex;
       continue;
     }
 
     if (token.type === "em_open") {
       const range = collectInlineRange(children, i, "em_open", "em_close");
-      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled));
+      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled, true));
       i = range.endIndex;
       continue;
     }
 
     if (token.type === "s_open") {
       const range = collectInlineRange(children, i, "s_open", "s_close");
-      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled));
+      out.push(...inlineToSegments(range.inner, strictMarkdown, boldEnabled, italicEnabled));
       i = range.endIndex;
       continue;
     }
 
     if (token.type === "link_open") {
       const range = collectInlineRange(children, i, "link_open", "link_close");
-      const label = segmentsToText(inlineToSegments(range.inner, strictMarkdown, false));
-      out.push({ text: renderLink(label, token.attrGet("href")), bold: boldEnabled });
+      const label = segmentsToText(inlineToSegments(range.inner, strictMarkdown, false, false));
+      out.push({ text: renderLink(label, token.attrGet("href")), bold: boldEnabled, italic: italicEnabled });
       i = range.endIndex;
     }
   }
@@ -306,7 +308,7 @@ function splitSegmentsByBreaks(segments) {
 
     for (let i = 0; i < parts.length; i += 1) {
       if (parts[i]) {
-        rows[rows.length - 1].push({ text: parts[i], bold: segment.bold });
+        rows[rows.length - 1].push({ text: parts[i], bold: segment.bold, italic: segment.italic });
       }
 
       if (i < parts.length - 1) {
@@ -326,24 +328,25 @@ function splitSegmentsByWidth(segments, width) {
   let pendingSpaces = [];
   let pendingSpaceWidth = 0;
 
-  function appendSegment(target, value, enabledBold) {
+  function appendSegment(target, value, enabledBold, enabledItalic) {
     if (!value) {
       return;
     }
 
     const boldValue = Boolean(enabledBold);
+    const italicValue = Boolean(enabledItalic);
     const prev = target[target.length - 1];
-    if (prev && prev.bold === boldValue) {
+    if (prev && prev.bold === boldValue && prev.italic === italicValue) {
       prev.text += value;
       return;
     }
 
-    target.push({ text: value, bold: boldValue });
+    target.push({ text: value, bold: boldValue, italic: italicValue });
   }
 
   function pushPendingSpaces() {
     for (const part of pendingSpaces) {
-      appendSegment(current, part.text, part.bold);
+      appendSegment(current, part.text, part.bold, part.italic);
     }
     currentWidth += pendingSpaceWidth;
     pendingSpaces = [];
@@ -369,7 +372,7 @@ function splitSegmentsByWidth(segments, width) {
 
         const room = safeWidth - currentWidth;
         const take = Math.min(room, part.text.length - start);
-        appendSegment(current, part.text.slice(start, start + take), part.bold);
+        appendSegment(current, part.text.slice(start, start + take), part.bold, part.italic);
         currentWidth += take;
         start += take;
       }
@@ -389,10 +392,10 @@ function splitSegmentsByWidth(segments, width) {
 
       const token = tokens[tokens.length - 1];
       const prevPart = token.parts[token.parts.length - 1];
-      if (prevPart && prevPart.bold === Boolean(segment.bold)) {
+      if (prevPart && prevPart.bold === Boolean(segment.bold) && prevPart.italic === Boolean(segment.italic)) {
         prevPart.text += ch;
       } else {
-        token.parts.push({ text: ch, bold: Boolean(segment.bold) });
+        token.parts.push({ text: ch, bold: Boolean(segment.bold), italic: Boolean(segment.italic) });
       }
       token.length += 1;
     }
@@ -444,6 +447,7 @@ function splitSegmentsByWidth(segments, width) {
 function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
   const parts = [];
   let activeBold = false;
+  let activeItalic = false;
 
   if (prefix) {
     parts.push(encodeEscposText(prefix, codePageName));
@@ -451,9 +455,16 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
 
   for (const segment of normalizeSegments(lineSegments)) {
     const segmentBold = Boolean(segment.bold);
+    const segmentItalic = Boolean(segment.italic);
+
     if (segmentBold !== activeBold) {
       parts.push(bold(segmentBold));
       activeBold = segmentBold;
+    }
+
+    if (segmentItalic !== activeItalic) {
+      parts.push(italic(segmentItalic));
+      activeItalic = segmentItalic;
     }
 
     parts.push(encodeEscposText(segment.text, codePageName));
@@ -461,6 +472,10 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
 
   if (activeBold) {
     parts.push(bold(false));
+  }
+
+  if (activeItalic) {
+    parts.push(italic(false));
   }
 
   parts.push(LINE_FEED);
@@ -645,7 +660,8 @@ function childrenContainQrShortcode(children) {
 function normalizeTaskMarkersInSegments(segments) {
   return normalizeSegments(segments).map((segment) => ({
     text: segment.text.replace(/\[X\]/g, "[x]"),
-    bold: segment.bold
+    bold: segment.bold,
+    italic: segment.italic
   }));
 }
 
@@ -809,7 +825,7 @@ function markdownToEscpos(markdown, options = {}) {
         if (currentListItem && !currentListItem.hasRenderedContent) {
           const indent = getListIndent(listItemDepth);
           segments = normalizeTaskMarkersInSegments(segments);
-          segments = [{ text: `${indent}${currentListItem.marker} `, bold: false }, ...segments];
+          segments = [{ text: `${indent}${currentListItem.marker} `, bold: false, italic: false }, ...segments];
           currentListItem.hasRenderedContent = true;
         }
 
