@@ -193,7 +193,9 @@ function collectInlineRange(children, startIndex, openType, closeType) {
 
 function normalizePrintableText(value) {
   return String(value || "")
-    .replace(/[‐‑‒–—―−]/g, "-");
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/[\u202F\u00A0]*°/g, " deg")
+    .replace(/[\u202F\u00A0]/g, " ");
 }
 
 function normalizeSegments(segments) {
