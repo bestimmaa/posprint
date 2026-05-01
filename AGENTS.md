@@ -35,6 +35,9 @@ This repository provides `posprint`: a Node.js module + CLI for markdown-to-ESC/
     - `test` test-only changes
     - `chore` tooling/maintenance only
 - Keep source references with URL + capture date when storing external material.
+- Maintain a changelog for every new release created via `npm version <type>`.
+  - Version history source of truth: Git tags in format `vMAJOR.MINOR.PATCH`.
+  - Fallback source when tags are missing/incomplete: `package.json` version history.
 - After changing module/CLI behavior, API, scripts, or workflow:
   - verify `README.md`
   - keep module and CLI docs aligned in the same change
