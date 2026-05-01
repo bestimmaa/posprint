@@ -242,6 +242,20 @@ test("normalizes unicode dash characters in inline text to ASCII hyphen", () => 
   assert.equal(text.includes("anti‑Semitic"), false);
 });
 
+test("normalizes additional unsafe unicode spacing and symbols to ASCII-safe text", () => {
+  const out = Buffer.from(markdownToEscpos("Weather Report — Berlin\nTemperature: 21.5 °C\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("Weather Report - Berlin"), true);
+  assert.equal(text.includes("Temperature: 21.5 degC"), true);
+  assert.equal(text.includes("—"), false);
+  assert.equal(text.includes(" "), false);
+  assert.equal(text.includes("°"), false);
+});
+
 test("best-effort mode degrades inline HTML to text", () => {
   const out = markdownToEscpos("before <span>x</span> after", {
     charsPerLine: 42,
