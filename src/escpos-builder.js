@@ -98,6 +98,42 @@ function rasterImage({ width, height, data }) {
   return concat([byte(0x1d, 0x76, 0x30, 0x00, xL, xH, yL, yH), payload]);
 }
 
+function font(value = "A") {
+  const normalized = String(value || "").trim().toUpperCase();
+  const map = { A: 0, B: 1, C: 2 };
+  const n = map[normalized];
+
+  if (n == null) {
+    throw new Error("Font must be one of A, B, C");
+  }
+
+  return byte(0x1b, 0x4d, n);
+}
+
+function characterSpacing(value = 0) {
+  const n = Math.max(0, Math.min(255, Number(value) || 0));
+  return byte(0x1b, 0x20, n);
+}
+
+function lineSpacing(value = 30) {
+  const n = Math.max(0, Math.min(255, Number(value) || 0));
+  return byte(0x1b, 0x33, n);
+}
+
+function leftMargin(value = 0) {
+  const n = Math.max(0, Math.min(65535, Number(value) || 0));
+  const nL = n & 0xff;
+  const nH = (n >> 8) & 0xff;
+  return byte(0x1d, 0x4c, nL, nH);
+}
+
+function printAreaWidth(value = 0) {
+  const n = Math.max(0, Math.min(65535, Number(value) || 0));
+  const nL = n & 0xff;
+  const nH = (n >> 8) & 0xff;
+  return byte(0x1d, 0x57, nL, nH);
+}
+
 function qrCode({ payload, size = 6, ec = "M" }) {
   const data = text(String(payload || ""));
   if (data.length === 0) {
@@ -170,6 +206,11 @@ module.exports = {
   cut,
   pulseDrawer,
   rasterImage,
+  font,
+  characterSpacing,
+  lineSpacing,
+  leftMargin,
+  printAreaWidth,
   qrCode,
   demoReceipt
 };

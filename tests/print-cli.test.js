@@ -49,6 +49,11 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--dry-run"), true);
   assert.equal(text.includes("--strict-markdown"), true);
   assert.equal(text.includes("--printer-uri"), true);
+  assert.equal(text.includes("--font"), true);
+  assert.equal(text.includes("--character-spacing-mm"), true);
+  assert.equal(text.includes("--line-spacing-mm"), true);
+  assert.equal(text.includes("--left-margin-mm"), true);
+  assert.equal(text.includes("--print-area-width-mm"), true);
 });
 
 test("formatHelp includes posprint usage", () => {
@@ -94,6 +99,45 @@ test("main validates --chars-per-line before platform check", async () => {
     () => main(["--chars-per-line=oops", "--markdown=hello"], { platform: () => "darwin" }),
     /Invalid --chars-per-line value/
   );
+});
+
+test("main forwards layout options to markdownToEscpos", async () => {
+  const calls = [];
+
+  const result = await main(
+    [
+      "--dry-run",
+      "--markdown=# hi",
+      "--font=b",
+      "--character-spacing-mm=1",
+      "--line-spacing-mm=3",
+      "--left-margin-mm=2",
+      "--print-area-width-mm=42"
+    ],
+    {
+      markdownToEscpos: (_markdown, options) => {
+        calls.push(options);
+        return Uint8Array.from([0x1b, 0x40]);
+      }
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].font, "B");
+  assert.equal(calls[0].characterSpacingMm, 1);
+  assert.equal(calls[0].lineSpacingMm, 3);
+  assert.equal(calls[0].leftMarginMm, 2);
+  assert.equal(calls[0].printAreaWidthMm, 42);
+});
+
+test("main rejects invalid layout flag values", async () => {
+  await assert.rejects(() => main(["--markdown=hello", "--font=Z"]), /Invalid --font value/);
+  await assert.rejects(() => main(["--markdown=hello", "--character-spacing-mm=abc"]), /Invalid --character-spacing-mm value/);
+  await assert.rejects(() => main(["--markdown=hello", "--character-spacing-mm=-1"]), /Invalid --character-spacing-mm value/);
+  await assert.rejects(() => main(["--markdown=hello", "--line-spacing-mm=0"]), /Invalid --line-spacing-mm value/);
+  await assert.rejects(() => main(["--markdown=hello", "--left-margin-mm=-1"]), /Invalid --left-margin-mm value/);
+  await assert.rejects(() => main(["--markdown=hello", "--print-area-width-mm=0"]), /Invalid --print-area-width-mm value/);
 });
 
 test("main prints on linux using injected printRaw", async () => {

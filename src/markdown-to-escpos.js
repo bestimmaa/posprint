@@ -14,7 +14,12 @@ const {
   feed,
   cut,
   rasterImage,
-  qrCode
+  qrCode,
+  font,
+  characterSpacing,
+  lineSpacing,
+  leftMargin,
+  printAreaWidth
 } = require("./escpos-builder");
 const { imageTokenToRaster } = require("./image-to-escpos");
 
@@ -657,12 +662,89 @@ function renderCodeBlock(text, chunks, charsPerLine) {
   chunks.push(line(""));
 }
 
+function toDots(mm) {
+  return Math.round(mm * 8);
+}
+
+function parseOptionalMm(value, name, { min, exclusiveMin = false }) {
+  if (value == null) {
+    return null;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error(`Invalid ${name}. Provide a numeric value in millimeters.`);
+  }
+
+  if (exclusiveMin ? numeric <= min : numeric < min) {
+    const relation = exclusiveMin ? "greater than" : "greater than or equal to";
+    throw new Error(`Invalid ${name}. Provide a value ${relation} ${min} mm.`);
+  }
+
+  return numeric;
+}
+
+function parseLayoutOptions(options = {}) {
+  const out = {};
+
+  if (options.font != null) {
+    const normalized = String(options.font).trim().toUpperCase();
+    if (!["A", "B", "C"].includes(normalized)) {
+      throw new Error("Invalid font. Use A, B, or C.");
+    }
+    out.font = normalized;
+  }
+
+  const characterSpacingMm = parseOptionalMm(options.characterSpacingMm, "characterSpacingMm", { min: 0 });
+  if (characterSpacingMm != null) {
+    out.characterSpacingDots = toDots(characterSpacingMm);
+  }
+
+  const lineSpacingMm = parseOptionalMm(options.lineSpacingMm, "lineSpacingMm", { min: 0, exclusiveMin: true });
+  if (lineSpacingMm != null) {
+    out.lineSpacingDots = toDots(lineSpacingMm);
+  }
+
+  const leftMarginMm = parseOptionalMm(options.leftMarginMm, "leftMarginMm", { min: 0 });
+  if (leftMarginMm != null) {
+    out.leftMarginDots = toDots(leftMarginMm);
+  }
+
+  const printAreaWidthMm = parseOptionalMm(options.printAreaWidthMm, "printAreaWidthMm", { min: 0, exclusiveMin: true });
+  if (printAreaWidthMm != null) {
+    out.printAreaWidthDots = toDots(printAreaWidthMm);
+  }
+
+  return out;
+}
+
 function markdownToEscpos(markdown, options = {}) {
   const charsPerLine = Number.isInteger(options.charsPerLine) ? options.charsPerLine : 42;
   const strictMarkdown = Boolean(options.strictMarkdown);
   const md = new MarkdownIt({ html: true, linkify: true, breaks: false });
   const tokens = md.parse(String(markdown || ""), {});
   const chunks = [init(), setInternationalCharset(0), setCodePage(0)];
+  const layoutOptions = parseLayoutOptions(options);
+
+  if (layoutOptions.font) {
+    chunks.push(font(layoutOptions.font));
+  }
+
+  if (layoutOptions.characterSpacingDots != null) {
+    chunks.push(characterSpacing(layoutOptions.characterSpacingDots));
+  }
+
+  if (layoutOptions.lineSpacingDots != null) {
+    chunks.push(lineSpacing(layoutOptions.lineSpacingDots));
+  }
+
+  if (layoutOptions.leftMarginDots != null) {
+    chunks.push(leftMargin(layoutOptions.leftMarginDots));
+  }
+
+  if (layoutOptions.printAreaWidthDots != null) {
+    chunks.push(printAreaWidth(layoutOptions.printAreaWidthDots));
+  }
 
   const listStack = [];
   const listItemStack = [];

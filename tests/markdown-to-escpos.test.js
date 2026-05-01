@@ -4,7 +4,15 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { markdownToEscpos, wrapText } = require("../src/markdown-to-escpos");
-const { rasterImage, qrCode } = require("../src/escpos-builder");
+const {
+  rasterImage,
+  qrCode,
+  font,
+  characterSpacing,
+  lineSpacing,
+  leftMargin,
+  printAreaWidth
+} = require("../src/escpos-builder");
 const {
   imageFileToRaster,
   resolveMarkdownImagePath,
@@ -34,6 +42,28 @@ test("builds native GS ( k QR command sequence", () => {
   assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, 0x06])), -1);
   assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31])), -1);
   assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30])), -1);
+});
+
+test("builds ESC M font command bytes for A/B/C", () => {
+  assert.deepEqual(Array.from(font("A")), [0x1b, 0x4d, 0x00]);
+  assert.deepEqual(Array.from(font("B")), [0x1b, 0x4d, 0x01]);
+  assert.deepEqual(Array.from(font("C")), [0x1b, 0x4d, 0x02]);
+});
+
+test("builds ESC SP character spacing command bytes", () => {
+  assert.deepEqual(Array.from(characterSpacing(8)), [0x1b, 0x20, 0x08]);
+});
+
+test("builds ESC 3 line spacing command bytes", () => {
+  assert.deepEqual(Array.from(lineSpacing(24)), [0x1b, 0x33, 0x18]);
+});
+
+test("builds GS L left margin command bytes", () => {
+  assert.deepEqual(Array.from(leftMargin(16)), [0x1d, 0x4c, 0x10, 0x00]);
+});
+
+test("builds GS W print area width command bytes", () => {
+  assert.deepEqual(Array.from(printAreaWidth(336)), [0x1d, 0x57, 0x50, 0x01]);
 });
 
 test("qrCode rejects empty payload", () => {
@@ -241,6 +271,35 @@ test("sets ESC/POS international charset and code page to fixed defaults", () =>
 
   assert.equal(out.includes(Buffer.from([0x1b, 0x52, 0x00])), true);
   assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x00])), true);
+});
+
+test("emits global font command from markdownToEscpos options", () => {
+  const out = Buffer.from(markdownToEscpos("hello", { charsPerLine: 42, font: "B" }));
+  assert.notEqual(out.indexOf(Buffer.from([0x1b, 0x4d, 0x01])), -1);
+});
+
+test("emits global layout spacing and width commands from mm options", () => {
+  const out = Buffer.from(markdownToEscpos("hello", {
+    charsPerLine: 42,
+    characterSpacingMm: 1,
+    lineSpacingMm: 3,
+    leftMarginMm: 2,
+    printAreaWidthMm: 42
+  }));
+
+  assert.notEqual(out.indexOf(Buffer.from([0x1b, 0x20, 0x08])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1b, 0x33, 0x18])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x4c, 0x10, 0x00])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x1d, 0x57, 0x50, 0x01])), -1);
+});
+
+test("validates layout options and throws for invalid values", () => {
+  assert.throws(() => markdownToEscpos("hello", { font: "Z" }), /font/i);
+  assert.throws(() => markdownToEscpos("hello", { characterSpacingMm: -1 }), /characterSpacingMm/i);
+  assert.throws(() => markdownToEscpos("hello", { lineSpacingMm: 0 }), /lineSpacingMm/i);
+  assert.throws(() => markdownToEscpos("hello", { leftMarginMm: -0.1 }), /leftMarginMm/i);
+  assert.throws(() => markdownToEscpos("hello", { printAreaWidthMm: 0 }), /printAreaWidthMm/i);
+  assert.throws(() => markdownToEscpos("hello", { characterSpacingMm: "abc" }), /characterSpacingMm/i);
 });
 
 test("preserves marker for empty parent list item with nested child", () => {
