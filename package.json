@@ -2,7 +2,7 @@
   "name": "posprint",
   "version": "0.2.2",
   "private": false,
-  "description": "ESC/POS printing CLI for EPSON TM-T88V over Windows RAW spooler",
+  "description": "Markdown-to-ESC/POS receipt printing CLI + Node.js module (Windows RAW + CUPS)",
   "main": "src/index.js",
   "bin": {
     "posprint": "src/print-cli.js"
