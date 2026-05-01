@@ -54,6 +54,7 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--line-spacing-mm"), true);
   assert.equal(text.includes("--left-margin-mm"), true);
   assert.equal(text.includes("--print-area-width-mm"), true);
+  assert.equal(text.includes("--code-page"), true);
 });
 
 test("formatHelp includes posprint usage", () => {
@@ -101,7 +102,7 @@ test("main validates --chars-per-line before platform check", async () => {
   );
 });
 
-test("main forwards layout options to markdownToEscpos", async () => {
+test("main forwards layout and code-page options to markdownToEscpos", async () => {
   const calls = [];
 
   const result = await main(
@@ -112,7 +113,8 @@ test("main forwards layout options to markdownToEscpos", async () => {
       "--character-spacing-mm=1",
       "--line-spacing-mm=3",
       "--left-margin-mm=2",
-      "--print-area-width-mm=42"
+      "--print-area-width-mm=42",
+      "--code-page=cp850"
     ],
     {
       markdownToEscpos: (_markdown, options) => {
@@ -129,6 +131,14 @@ test("main forwards layout options to markdownToEscpos", async () => {
   assert.equal(calls[0].lineSpacingMm, 3);
   assert.equal(calls[0].leftMarginMm, 2);
   assert.equal(calls[0].printAreaWidthMm, 42);
+  assert.equal(calls[0].codePage, "cp850");
+});
+
+test("main rejects unsupported --code-page", async () => {
+  await assert.rejects(
+    () => main(["--dry-run", "--markdown=hello", "--code-page=cp9999"]),
+    /Unsupported code page/i
+  );
 });
 
 test("main rejects invalid layout flag values", async () => {

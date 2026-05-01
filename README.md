@@ -83,6 +83,7 @@ const { markdownToEscpos } = require("posprint");
 const markdown = "# Dry Run\n\n- Tea\n- Muffin";
 const escpos = markdownToEscpos(markdown, {
   charsPerLine: 42,
+  codePage: "cp850",
   font: "B",
   lineSpacingMm: 3,
   leftMarginMm: 2,
@@ -118,6 +119,7 @@ Flags:
 - `--printer="Printer Name"`: Target an exact local printer queue.
 - `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
+- `--code-page=<name>`: ESC/POS code page name (default: `cp850`).
 - `--font=A|B|C`: Select ESC/POS font for the full receipt.
 - `--character-spacing-mm=<n>`: Character spacing in millimeters (`>= 0`).
 - `--line-spacing-mm=<n>`: Line spacing in millimeters (`> 0`).
@@ -180,6 +182,35 @@ Global layout options are supported for each generated receipt (module + CLI):
 Values are in millimeters and converted internally to ESC/POS units for TM-T88V workflows.
 
 Not included in this change: tab stops, absolute positioning, and relative positioning.
+
+## Code Pages and Text Encoding
+
+`posprint` transcodes Unicode markdown text into the selected ESC/POS code page bytes before sending print payloads.
+This is required for receipt printers because selecting a code page command (`ESC t n`) does not make UTF-8 payload bytes print correctly on its own.
+
+Default code page:
+
+- `cp850` (ESC/POS `ESC t 2`)
+
+CLI:
+
+- `--code-page=cp850`
+
+Module:
+
+- `markdownToEscpos(markdown, { codePage: "cp850" })`
+
+Fallback behavior for unencodable characters:
+
+1. Try direct encode in active code page.
+2. If not encodable, apply ASCII-safe normalization fallback.
+3. If still not encodable, emit `?`.
+
+### Supported code pages
+
+| Name  | CLI value | ESC/POS ID (`ESC t n`) | Notes |
+|-------|-----------|------------------------|-------|
+| CP850 | `cp850`   | `2`                    | Default Western code page in this release |
 
 Printer selection order:
 

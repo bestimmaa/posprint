@@ -5,6 +5,7 @@ const os = require("os");
 const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { markdownToEscpos, listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
+const { resolveCodePage } = require("./text-transcoder");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -22,6 +23,7 @@ function formatHelp() {
     "  --line-spacing-mm=<n>    Line spacing in mm (> 0)",
     "  --left-margin-mm=<n>     Left margin in mm (>= 0)",
     "  --print-area-width-mm=<n>  Print area width in mm (> 0)",
+    "  --code-page=<name>      ESC/POS code page (default: cp850)",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
     "  --help                   Show help",
@@ -83,6 +85,16 @@ function parseOptionalMmArg(argv, flag, { min, exclusiveMin = false }) {
   }
 
   return value;
+}
+
+function parseCodePageOption(argv) {
+  const raw = getArgValue(argv, "--code-page");
+
+  if (raw == null) {
+    return "cp850";
+  }
+
+  return resolveCodePage(raw).name;
 }
 
 function parseLayoutOptions(argv) {
@@ -170,11 +182,13 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const warn = deps.warn || ((message) => console.warn(message));
   const printerUri = validatePrinterUri(printerUriRaw, { warn });
   const layoutOptions = parseLayoutOptions(argv);
+  const codePage = parseCodePageOption(argv);
 
   const { markdown } = await resolveMarkdownInput({ argv });
   const payload = Buffer.from(markdownToEscposFn(markdown, {
     charsPerLine,
     strictMarkdown,
+    codePage,
     ...layoutOptions
   }));
 

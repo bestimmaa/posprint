@@ -10,7 +10,6 @@ const {
   bold,
   size,
   line,
-  text,
   feed,
   cut,
   rasterImage,
@@ -22,6 +21,9 @@ const {
   printAreaWidth
 } = require("./escpos-builder");
 const { imageTokenToRaster } = require("./image-to-escpos");
+const { encodeText, resolveCodePage } = require("./text-transcoder");
+
+const LINE_FEED = Uint8Array.from([0x0a]);
 
 function wrapText(text, width) {
   const value = String(text || "").trim();
@@ -68,9 +70,17 @@ function wrapText(text, width) {
   return lines.length ? lines : [""];
 }
 
-function renderWrappedPlainText(text, charsPerLine) {
+function encodeEscposText(value, codePageName) {
+  return encodeText(value, { codePage: codePageName });
+}
+
+function encodedLine(value, codePageName) {
+  return concat([encodeEscposText(value, codePageName), LINE_FEED]);
+}
+
+function renderWrappedPlainText(text, charsPerLine, codePageName) {
   const lines = wrapText(text, charsPerLine);
-  return lines.map((value) => line(value));
+  return lines.map((value) => encodedLine(value, codePageName));
 }
 
 function renderLink(label, href) {
@@ -191,13 +201,6 @@ function collectInlineRange(children, startIndex, openType, closeType) {
   };
 }
 
-function normalizePrintableText(value) {
-  return String(value || "")
-    .replace(/[‐‑‒–—―−]/g, "-")
-    .replace(/[\u202F\u00A0]*°/g, " deg")
-    .replace(/[\u202F\u00A0]/g, " ");
-}
-
 function normalizeSegments(segments) {
   const out = [];
 
@@ -206,7 +209,7 @@ function normalizeSegments(segments) {
       continue;
     }
 
-    const value = normalizePrintableText(segment.text);
+    const value = String(segment.text);
     if (!value) {
       continue;
     }
@@ -438,12 +441,12 @@ function splitSegmentsByWidth(segments, width) {
   return lines;
 }
 
-function renderStyledLine(lineSegments, chunks, prefix = "") {
+function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
   const parts = [];
   let activeBold = false;
 
   if (prefix) {
-    parts.push(text(prefix));
+    parts.push(encodeEscposText(prefix, codePageName));
   }
 
   for (const segment of normalizeSegments(lineSegments)) {
@@ -453,18 +456,18 @@ function renderStyledLine(lineSegments, chunks, prefix = "") {
       activeBold = segmentBold;
     }
 
-    parts.push(text(segment.text));
+    parts.push(encodeEscposText(segment.text, codePageName));
   }
 
   if (activeBold) {
     parts.push(bold(false));
   }
 
-  parts.push(text("\n"));
+  parts.push(LINE_FEED);
   chunks.push(concat(parts));
 }
 
-function renderWrappedSegments(segments, chunks, charsPerLine, prefix = "") {
+function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "") {
   const safePrefix = String(prefix || "");
   const rowWidth = Math.max(1, charsPerLine - safePrefix.length);
   const rows = splitSegmentsByBreaks(segments);
@@ -473,12 +476,12 @@ function renderWrappedSegments(segments, chunks, charsPerLine, prefix = "") {
     const wrapped = splitSegmentsByWidth(row, rowWidth);
 
     for (const wrappedLine of wrapped) {
-      renderStyledLine(wrappedLine, chunks, safePrefix);
+      renderStyledLine(wrappedLine, chunks, codePageName, safePrefix);
     }
   }
 }
 
-function renderHeading(level, text, chunks, charsPerLine) {
+function renderHeading(level, text, chunks, charsPerLine, codePageName) {
   if (level === 1) {
     chunks.push(align("center"), bold(true), size(1, 1));
   } else if (level === 2) {
@@ -488,27 +491,27 @@ function renderHeading(level, text, chunks, charsPerLine) {
   }
 
   for (const wrapped of wrapText(text, charsPerLine)) {
-    chunks.push(line(wrapped));
+    chunks.push(encodedLine(wrapped, codePageName));
   }
 
-  chunks.push(size(0, 0), bold(false), align("left"), line(""));
+  chunks.push(size(0, 0), bold(false), align("left"), encodedLine("", codePageName));
 }
 
-function renderParagraph(text, chunks, charsPerLine) {
+function renderParagraph(text, chunks, charsPerLine, codePageName) {
   const rows = String(text || "").split(/\r?\n/);
   for (const row of rows) {
-    chunks.push(...renderWrappedPlainText(row, charsPerLine));
+    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName));
   }
-  chunks.push(line(""));
+  chunks.push(encodedLine("", codePageName));
 }
 
-function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, prefix = "") {
+function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "") {
   const segments = inlineToSegments(children, strictMarkdown);
-  renderWrappedSegments(segments, chunks, charsPerLine, prefix);
-  chunks.push(line(""));
+  renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix);
+  chunks.push(encodedLine("", codePageName));
 }
 
-function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, prefix = "") {
+function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "") {
   const buffered = [];
   const inlineChildren = Array.isArray(children) ? children : [];
 
@@ -517,7 +520,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
       return;
     }
     const segments = inlineToSegments(buffered, strictMarkdown);
-    renderWrappedSegments(segments, chunks, charsPerLine, prefix);
+    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix);
     buffered.length = 0;
   }
 
@@ -578,7 +581,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
 
       chunks.push(align("center"));
       chunks.push(rasterImage(raster));
-      chunks.push(text("\n"));
+      chunks.push(LINE_FEED);
       chunks.push(align("left"));
       continue;
     }
@@ -606,7 +609,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
           const parsed = parseQrShortcode(part.raw);
           chunks.push(align("center"));
           chunks.push(qrCode(parsed));
-          chunks.push(text("\n"));
+          chunks.push(LINE_FEED);
           chunks.push(align("left"));
         } catch (error) {
           const message = `Invalid QR shortcode "${part.raw}": ${error.message}`;
@@ -661,12 +664,12 @@ function renderRule(chunks, charsPerLine) {
   chunks.push(line("-".repeat(Math.max(8, Math.min(charsPerLine, 42)))));
 }
 
-function renderCodeBlock(text, chunks, charsPerLine) {
+function renderCodeBlock(text, chunks, charsPerLine, codePageName) {
   const rows = String(text || "").split(/\r?\n/);
   for (const row of rows) {
-    chunks.push(...renderWrappedPlainText(row, charsPerLine));
+    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName));
   }
-  chunks.push(line(""));
+  chunks.push(encodedLine("", codePageName));
 }
 
 function toDots(mm) {
@@ -728,9 +731,10 @@ function parseLayoutOptions(options = {}) {
 function markdownToEscpos(markdown, options = {}) {
   const charsPerLine = Number.isInteger(options.charsPerLine) ? options.charsPerLine : 42;
   const strictMarkdown = Boolean(options.strictMarkdown);
+  const selectedCodePage = resolveCodePage(options.codePage || "cp850");
   const md = new MarkdownIt({ html: true, linkify: true, breaks: false });
   const tokens = md.parse(String(markdown || ""), {});
-  const chunks = [init(), setInternationalCharset(0), setCodePage(0)];
+  const chunks = [init(), setInternationalCharset(0), setCodePage(selectedCodePage.escposId)];
   const layoutOptions = parseLayoutOptions(options);
 
   if (layoutOptions.font) {
@@ -765,7 +769,7 @@ function markdownToEscpos(markdown, options = {}) {
       const level = Number(token.tag.slice(1));
       const inline = tokens[i + 1];
       const text = inline && inline.type === "inline" ? inlineToText(inline.children, strictMarkdown) : "";
-      renderHeading(level, text, chunks, charsPerLine);
+      renderHeading(level, text, chunks, charsPerLine, selectedCodePage.name);
       i += 2;
       continue;
     }
@@ -787,7 +791,14 @@ function markdownToEscpos(markdown, options = {}) {
             currentListItem.hasRenderedContent = true;
           }
 
-          renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, `${quotePrefix}${getListIndent(listItemDepth)}  `);
+          renderInlineChildrenWithImages(
+            children,
+            chunks,
+            charsPerLine,
+            strictMarkdown,
+            selectedCodePage.name,
+            `${quotePrefix}${getListIndent(listItemDepth)}  `
+          );
           chunks.push(line(""));
           i += 2;
           continue;
@@ -802,13 +813,13 @@ function markdownToEscpos(markdown, options = {}) {
           currentListItem.hasRenderedContent = true;
         }
 
-        renderWrappedSegments(segments, chunks, charsPerLine, quotePrefix);
+        renderWrappedSegments(segments, chunks, charsPerLine, selectedCodePage.name, quotePrefix);
         chunks.push(line(""));
         i += 2;
         continue;
       }
 
-      renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, quotePrefix);
+      renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, quotePrefix);
       chunks.push(line(""));
       i += 2;
       continue;
@@ -882,7 +893,7 @@ function markdownToEscpos(markdown, options = {}) {
     }
 
     if (token.type === "fence" || token.type === "code_block") {
-      renderCodeBlock(token.content, chunks, charsPerLine);
+      renderCodeBlock(token.content, chunks, charsPerLine, selectedCodePage.name);
       continue;
     }
 
@@ -890,7 +901,7 @@ function markdownToEscpos(markdown, options = {}) {
       if (strictMarkdown) {
         throw new Error(`Unsupported markdown construct: ${token.type}`);
       }
-      chunks.push(...renderWrappedPlainText(token.content, charsPerLine));
+      chunks.push(...renderWrappedPlainText(token.content, charsPerLine, selectedCodePage.name));
       continue;
     }
   }

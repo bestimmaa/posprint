@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { readFileSync } = require("node:fs");
 const { markdownToEscpos, wrapText } = require("../src/markdown-to-escpos");
 const {
   rasterImage,
@@ -242,18 +243,16 @@ test("normalizes unicode dash characters in inline text to ASCII hyphen", () => 
   assert.equal(text.includes("anti‑Semitic"), false);
 });
 
-test("normalizes additional unsafe unicode spacing and symbols to ASCII-safe text", () => {
+test("normalizes unsupported spacing/symbols while preserving cp850 degree sign", () => {
   const out = Buffer.from(markdownToEscpos("Weather Report — Berlin\nTemperature: 21.5 °C\n", {
     charsPerLine: 42,
     strictMarkdown: false
   }));
-  const text = out.toString("utf8");
 
-  assert.equal(text.includes("Weather Report - Berlin"), true);
-  assert.equal(text.includes("Temperature: 21.5 degC"), true);
-  assert.equal(text.includes("—"), false);
-  assert.equal(text.includes(" "), false);
-  assert.equal(text.includes("°"), false);
+  assert.notEqual(out.indexOf(Buffer.from("Weather Report - Berlin", "ascii")), -1);
+  assert.notEqual(out.indexOf(Buffer.from("Temperature: 21.5 ", "ascii")), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0xf8, 0x43])), -1);
+  assert.equal(out.indexOf(Buffer.from("degC", "ascii")), -1);
 });
 
 test("best-effort mode degrades inline HTML to text", () => {
@@ -290,14 +289,54 @@ test("renders nested list parent and child markers", () => {
   assert.equal(text.includes("  - child"), true);
 });
 
-test("sets ESC/POS international charset and code page to fixed defaults", () => {
+test("sets ESC/POS international charset and cp850 code page defaults", () => {
   const out = Buffer.from(markdownToEscpos("- [ ] open\n> quote\n", {
     charsPerLine: 42,
     strictMarkdown: false
   }));
 
   assert.equal(out.includes(Buffer.from([0x1b, 0x52, 0x00])), true);
-  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x00])), true);
+  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x02])), true);
+});
+
+test("encodes representative western characters using cp850 bytes", () => {
+  const out = Buffer.from(markdownToEscpos("°äöüßéèàñ", {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp850"
+  }));
+
+  assert.notEqual(out.indexOf(Buffer.from([0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4])), -1);
+});
+
+test("fixture with western chars encodes expected cp850 bytes", () => {
+  const markdown = readFileSync(path.resolve(__dirname, "fixtures", "markdown-codepage-western.md"), "utf8");
+  const out = Buffer.from(markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp850"
+  }));
+
+  for (const byte of [0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4]) {
+    assert.notEqual(out.indexOf(Buffer.from([byte])), -1);
+  }
+});
+
+test("falls back to '?' when char is not encodable in cp850", () => {
+  const out = Buffer.from(markdownToEscpos("Value λ", {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp850"
+  }));
+
+  assert.notEqual(out.indexOf(Buffer.from("Value ?", "ascii")), -1);
+});
+
+test("rejects unknown codePage option", () => {
+  assert.throws(
+    () => markdownToEscpos("hello", { charsPerLine: 42, codePage: "cp9999" }),
+    /Unsupported code page/i
+  );
 });
 
 test("emits global font command from markdownToEscpos options", () => {
