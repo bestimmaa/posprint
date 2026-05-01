@@ -17,6 +17,11 @@ function formatHelp() {
     "  --printer=<name>         Select printer",
     "  --printer-uri=<uri>      Print directly to CUPS URI (ipp://...)",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
+    "  --font=A|B|C             Select ESC/POS font",
+    "  --character-spacing-mm=<n>  Character spacing in mm (>= 0)",
+    "  --line-spacing-mm=<n>    Line spacing in mm (> 0)",
+    "  --left-margin-mm=<n>     Left margin in mm (>= 0)",
+    "  --print-area-width-mm=<n>  Print area width in mm (> 0)",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
     "  --help                   Show help",
@@ -55,6 +60,64 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
   }
 
   return parsed.toString();
+}
+
+function parseOptionalMmArg(argv, flag, { min, exclusiveMin = false }) {
+  const raw = getArgValue(argv, flag);
+
+  if (raw == null) {
+    return null;
+  }
+
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`Invalid ${flag} value. Provide a numeric millimeter value.`);
+  }
+
+  if (exclusiveMin ? value <= min : value < min) {
+    if (exclusiveMin) {
+      throw new Error(`Invalid ${flag} value. Provide a number greater than ${min}.`);
+    }
+
+    throw new Error(`Invalid ${flag} value. Provide a number greater than or equal to ${min}.`);
+  }
+
+  return value;
+}
+
+function parseLayoutOptions(argv) {
+  const layoutOptions = {};
+  const fontRaw = getArgValue(argv, "--font");
+
+  if (fontRaw != null) {
+    const normalized = String(fontRaw).trim().toUpperCase();
+    if (!["A", "B", "C"].includes(normalized)) {
+      throw new Error("Invalid --font value. Use A, B, or C.");
+    }
+    layoutOptions.font = normalized;
+  }
+
+  const characterSpacingMm = parseOptionalMmArg(argv, "--character-spacing-mm", { min: 0 });
+  if (characterSpacingMm != null) {
+    layoutOptions.characterSpacingMm = characterSpacingMm;
+  }
+
+  const lineSpacingMm = parseOptionalMmArg(argv, "--line-spacing-mm", { min: 0, exclusiveMin: true });
+  if (lineSpacingMm != null) {
+    layoutOptions.lineSpacingMm = lineSpacingMm;
+  }
+
+  const leftMarginMm = parseOptionalMmArg(argv, "--left-margin-mm", { min: 0 });
+  if (leftMarginMm != null) {
+    layoutOptions.leftMarginMm = leftMarginMm;
+  }
+
+  const printAreaWidthMm = parseOptionalMmArg(argv, "--print-area-width-mm", { min: 0, exclusiveMin: true });
+  if (printAreaWidthMm != null) {
+    layoutOptions.printAreaWidthMm = printAreaWidthMm;
+  }
+
+  return layoutOptions;
 }
 
 async function resolveMarkdownInput({ argv }) {
@@ -102,12 +165,18 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const listPrintersFn = deps.listPrinters || listPrinters;
   const printRawFn = deps.printRaw || printRaw;
   const printRawToPrinterUriFn = deps.printRawToPrinterUri || printRawToPrinterUri;
+  const markdownToEscposFn = deps.markdownToEscpos || markdownToEscpos;
   const printerUriRaw = getArgValue(argv, "--printer-uri");
   const warn = deps.warn || ((message) => console.warn(message));
   const printerUri = validatePrinterUri(printerUriRaw, { warn });
+  const layoutOptions = parseLayoutOptions(argv);
 
   const { markdown } = await resolveMarkdownInput({ argv });
-  const payload = Buffer.from(markdownToEscpos(markdown, { charsPerLine, strictMarkdown }));
+  const payload = Buffer.from(markdownToEscposFn(markdown, {
+    charsPerLine,
+    strictMarkdown,
+    ...layoutOptions
+  }));
 
   if (dryRun) {
     return { printerName: null, payloadLength: payload.length, dryRun: true };

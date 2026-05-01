@@ -81,7 +81,13 @@ Conversion only (build ESC/POS bytes without sending a print job):
 const { markdownToEscpos } = require("posprint");
 
 const markdown = "# Dry Run\n\n- Tea\n- Muffin";
-const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
+const escpos = markdownToEscpos(markdown, {
+  charsPerLine: 42,
+  font: "B",
+  lineSpacingMm: 3,
+  leftMarginMm: 2,
+  printAreaWidthMm: 42
+});
 
 console.log(`ESC/POS payload bytes: ${escpos.length}`);
 ```
@@ -112,6 +118,11 @@ Flags:
 - `--printer="Printer Name"`: Target an exact local printer queue.
 - `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
+- `--font=A|B|C`: Select ESC/POS font for the full receipt.
+- `--character-spacing-mm=<n>`: Character spacing in millimeters (`>= 0`).
+- `--line-spacing-mm=<n>`: Line spacing in millimeters (`> 0`).
+- `--left-margin-mm=<n>`: Left margin in millimeters (`>= 0`).
+- `--print-area-width-mm=<n>`: Print area width in millimeters (`> 0`).
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.
 
@@ -156,6 +167,20 @@ Validation behavior:
 - `--strict-markdown`: invalid QR shortcodes fail the command.
 - Default best-effort mode: invalid QR shortcodes print a warning and are rendered literally.
 
+## Layout Controls (Safe Subset)
+
+Global layout options are supported for each generated receipt (module + CLI):
+
+- `font` / `--font=A|B|C`
+- `characterSpacingMm` / `--character-spacing-mm=<n>`
+- `lineSpacingMm` / `--line-spacing-mm=<n>`
+- `leftMarginMm` / `--left-margin-mm=<n>`
+- `printAreaWidthMm` / `--print-area-width-mm=<n>`
+
+Values are in millimeters and converted internally to ESC/POS units for TM-T88V workflows.
+
+Not included in this change: tab stops, absolute positioning, and relative positioning.
+
 Printer selection order:
 
 1. `--printer`
@@ -169,6 +194,13 @@ Dry run with inline markdown:
 
 ```bash
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant" --chars-per-line=42
+```
+
+Dry run with global layout controls:
+
+```bash
+posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md" \
+  --font=B --character-spacing-mm=1 --line-spacing-mm=3 --left-margin-mm=2 --print-area-width-mm=42
 ```
 
 PowerShell multiline markdown:
