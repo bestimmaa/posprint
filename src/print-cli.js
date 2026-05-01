@@ -5,7 +5,7 @@ const os = require("os");
 const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { markdownToEscpos, listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
-const { resolveCodePage } = require("./text-transcoder");
+const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -23,11 +23,26 @@ function formatHelp() {
     "  --line-spacing-mm=<n>    Line spacing in mm (> 0)",
     "  --left-margin-mm=<n>     Left margin in mm (>= 0)",
     "  --print-area-width-mm=<n>  Print area width in mm (> 0)",
-    "  --code-page=<name>      ESC/POS code page (default: cp850)",
+    "  --code-page=<name>      ESC/POS code page (default: cp858)",
+    "  --list-code-pages       Print supported code pages with ids and names",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
     "  --help                   Show help",
     "  --version                Show version"
+  ].join("\n");
+}
+
+function formatCodePages() {
+  const pages = getSupportedCodePages();
+  const rows = pages.map(({ name, escposId }) => `  ${name.padEnd(8)} ${escposId}`);
+  const names = pages.map(({ name }) => name).join("\n");
+
+  return [
+    "Supported code pages (name, ESC/POS id):",
+    ...rows,
+    "",
+    "Canonical names:",
+    names
   ].join("\n");
 }
 
@@ -91,7 +106,7 @@ function parseCodePageOption(argv) {
   const raw = getArgValue(argv, "--code-page");
 
   if (raw == null) {
-    return "cp850";
+    return "cp858";
   }
 
   return resolveCodePage(raw).name;
@@ -149,14 +164,21 @@ async function resolveMarkdownInput({ argv }) {
 }
 
 async function main(argv = process.argv.slice(2), deps = {}) {
+  const log = deps.log || ((message) => console.log(message));
+
   if (hasFlag(argv, "--help")) {
-    console.log(formatHelp());
+    log(formatHelp());
     return { mode: "help" };
   }
 
   if (hasFlag(argv, "--version")) {
-    console.log(pkg.version);
+    log(pkg.version);
     return { mode: "version", version: pkg.version };
+  }
+
+  if (hasFlag(argv, "--list-code-pages")) {
+    log(formatCodePages());
+    return { mode: "list-code-pages", codePages: getSupportedCodePages() };
   }
 
   const dryRun = hasFlag(argv, "--dry-run");
@@ -224,7 +246,7 @@ module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform, val
 if (require.main === module) {
   main().then(
     (result) => {
-      if (result.mode === "help" || result.mode === "version") {
+      if (result.mode === "help" || result.mode === "version" || result.mode === "list-code-pages") {
         return;
       }
 

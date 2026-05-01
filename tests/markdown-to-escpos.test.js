@@ -289,14 +289,14 @@ test("renders nested list parent and child markers", () => {
   assert.equal(text.includes("  - child"), true);
 });
 
-test("sets ESC/POS international charset and cp850 code page defaults", () => {
+test("sets ESC/POS international charset and cp858 code page defaults", () => {
   const out = Buffer.from(markdownToEscpos("- [ ] open\n> quote\n", {
     charsPerLine: 42,
     strictMarkdown: false
   }));
 
   assert.equal(out.includes(Buffer.from([0x1b, 0x52, 0x00])), true);
-  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x02])), true);
+  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x13])), true);
 });
 
 test("encodes representative western characters using cp850 bytes", () => {
@@ -320,6 +320,17 @@ test("fixture with western chars encodes expected cp850 bytes", () => {
   for (const byte of [0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4]) {
     assert.notEqual(out.indexOf(Buffer.from([byte])), -1);
   }
+});
+
+test("uses cp1252 ESC/POS code-page id and bytes when selected", () => {
+  const out = Buffer.from(markdownToEscpos("\u201cHi\u201d", {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp1252"
+  }));
+
+  assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x10])), true);
+  assert.notEqual(out.indexOf(Buffer.from([0x93, 0x48, 0x69, 0x94])), -1);
 });
 
 test("falls back to '?' when char is not encodable in cp850", () => {

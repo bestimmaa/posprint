@@ -55,6 +55,7 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--left-margin-mm"), true);
   assert.equal(text.includes("--print-area-width-mm"), true);
   assert.equal(text.includes("--code-page"), true);
+  assert.equal(text.includes("--list-code-pages"), true);
 });
 
 test("formatHelp includes posprint usage", () => {
@@ -88,6 +89,26 @@ test("main returns version mode when --version flag is present", async () => {
   assert.equal(result.mode, "version");
 });
 
+test("main returns list-code-pages mode and prints ids plus canonical names", async () => {
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (value) => lines.push(String(value));
+
+  try {
+    const result = await main(["--list-code-pages"]);
+    assert.equal(result.mode, "list-code-pages");
+
+    const output = lines.join("\n");
+    assert.match(output, /cp437\s+0/i);
+    assert.match(output, /cp850\s+2/i);
+    assert.match(output, /cp858\s+19/i);
+    assert.match(output, /cp1252\s+16/i);
+    assert.match(output, /canonical names/i);
+  } finally {
+    console.log = originalLog;
+  }
+});
+
 test("main rejects non-integer --chars-per-line", async () => {
   await assert.rejects(
     () => main(["--chars-per-line=42abc", "--markdown=hello"]),
@@ -114,7 +135,7 @@ test("main forwards layout and code-page options to markdownToEscpos", async () 
       "--line-spacing-mm=3",
       "--left-margin-mm=2",
       "--print-area-width-mm=42",
-      "--code-page=cp850"
+      "--code-page=cp858"
     ],
     {
       markdownToEscpos: (_markdown, options) => {
@@ -131,7 +152,7 @@ test("main forwards layout and code-page options to markdownToEscpos", async () 
   assert.equal(calls[0].lineSpacingMm, 3);
   assert.equal(calls[0].leftMarginMm, 2);
   assert.equal(calls[0].printAreaWidthMm, 42);
-  assert.equal(calls[0].codePage, "cp850");
+  assert.equal(calls[0].codePage, "cp858");
 });
 
 test("main rejects unsupported --code-page", async () => {

@@ -4,15 +4,25 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { resolveCodePage, getSupportedCodePages, encodeText } = require("../src/text-transcoder");
 
-test("resolveCodePage returns cp850 metadata and escpos id", () => {
-  const page = resolveCodePage("cp850");
-  assert.equal(page.name, "cp850");
-  assert.equal(page.escposId, 2);
+test("resolveCodePage defaults to cp858 metadata and escpos id", () => {
+  const page = resolveCodePage();
+  assert.equal(page.name, "cp858");
+  assert.equal(page.escposId, 19);
 });
 
-test("getSupportedCodePages lists cp850", () => {
+test("resolveCodePage returns cp437 and cp1252 metadata and escpos ids", () => {
+  assert.equal(resolveCodePage("cp437").escposId, 0);
+  assert.equal(resolveCodePage("cp1252").escposId, 16);
+});
+
+test("getSupportedCodePages lists cp437, cp850, cp858, cp1252", () => {
   const pages = getSupportedCodePages();
-  assert.deepEqual(pages, [{ name: "cp850", escposId: 2 }]);
+  assert.deepEqual(pages, [
+    { name: "cp437", escposId: 0 },
+    { name: "cp850", escposId: 2 },
+    { name: "cp858", escposId: 19 },
+    { name: "cp1252", escposId: 16 }
+  ]);
 });
 
 test("encodeText emits cp850 bytes for representative Western chars", () => {
@@ -20,13 +30,25 @@ test("encodeText emits cp850 bytes for representative Western chars", () => {
   assert.deepEqual(Array.from(out), [0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4]);
 });
 
+test("encodeText emits cp858 euro byte", () => {
+  const out = Buffer.from(encodeText("Total 12.50 €", { codePage: "cp858" }));
+  assert.notEqual(out.indexOf(Buffer.from([0xd5])), -1);
+});
+
+test("encodeText emits cp1252 smart punctuation bytes", () => {
+  const out = Buffer.from(encodeText("\u201cHi\u201d \u2014 ok", { codePage: "cp1252" }));
+  assert.notEqual(out.indexOf(Buffer.from([0x93])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x94])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0x97])), -1);
+});
+
 test("encodeText keeps ASCII unchanged", () => {
-  const out = Buffer.from(encodeText("Hello-123", { codePage: "cp850" }));
+  const out = Buffer.from(encodeText("Hello-123", { codePage: "cp437" }));
   assert.deepEqual(Array.from(out), Array.from(Buffer.from("Hello-123", "ascii")));
 });
 
 test("encodeText falls back to deterministic '?' when char is not encodable", () => {
-  const out = Buffer.from(encodeText("ok λ", { codePage: "cp850" }));
+  const out = Buffer.from(encodeText("ok λ", { codePage: "cp437" }));
   assert.equal(out.includes(Buffer.from("ok ?", "ascii")), true);
 });
 

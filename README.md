@@ -2,6 +2,23 @@
 
 `posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V, supporting Windows RAW spooler and Linux/macOS CUPS raw printing, with practical workflows for conversion-only and real print jobs.
 
+## Contents
+
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [CLI Usage](#cli-usage)
+- [Module Usage](#module-usage)
+- [Markdown Images](#markdown-images)
+- [Native QR Codes](#native-qr-codes)
+- [Layout Controls (Safe Subset)](#layout-controls-safe-subset)
+- [Code Pages and Text Encoding](#code-pages-and-text-encoding)
+- [Examples](#examples)
+- [Development](#development)
+- [Bitbucket Pipeline Artifact Build](#bitbucket-pipeline-artifact-build)
+- [Windows Requirements](#windows-requirements)
+- [Linux/macOS Requirements](#linuxmacos-requirements)
+- [License](#license)
+
 ## Install
 
 Install globally:
@@ -24,16 +41,16 @@ Show CLI help:
 posprint --help
 ```
 
-Dry run from the test fixture (build payload and select printer, no print job):
+Dry run from inline markdown (build payload only; no printer discovery and no print job):
 
 ```bash
-posprint --dry-run --markdown-file="tests/fixtures/markdown-showcase.md"
+posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant"
 ```
 
 Send a real print job to a specific printer queue (Windows, Linux, or macOS):
 
 ```bash
-posprint --markdown-file="tests/fixtures/markdown-showcase.md" --printer="EPSON TM-T88V Receipt (USB)"
+posprint --markdown="# Hello\n\n- Espresso\n- Croissant" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
 ## Module Usage
@@ -69,10 +86,17 @@ Direct CUPS URI printing (linux/macOS):
 ```js
 const { markdownToEscpos, printRawToPrinterUri } = require("posprint");
 
-const markdown = "# Hello\n\n- Espresso";
-const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
+async function printToUri() {
+  const markdown = "# Hello\n\n- Espresso";
+  const escpos = markdownToEscpos(markdown, { charsPerLine: 42 });
 
-await printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from(escpos));
+  await printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from(escpos));
+}
+
+printToUri().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
 ```
 
 Conversion only (build ESC/POS bytes without sending a print job):
@@ -83,7 +107,7 @@ const { markdownToEscpos } = require("posprint");
 const markdown = "# Dry Run\n\n- Tea\n- Muffin";
 const escpos = markdownToEscpos(markdown, {
   charsPerLine: 42,
-  codePage: "cp850",
+  codePage: "cp858",
   font: "B",
   lineSpacingMm: 3,
   leftMarginMm: 2,
@@ -119,7 +143,8 @@ Flags:
 - `--printer="Printer Name"`: Target an exact local printer queue.
 - `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
-- `--code-page=<name>`: ESC/POS code page name (default: `cp850`).
+- `--code-page=<name>`: ESC/POS code page name (default: `cp858`).
+- `--list-code-pages`: Print supported code pages as a table (`name` + ESC/POS id) and as canonical names for scripting.
 - `--font=A|B|C`: Select ESC/POS font for the full receipt.
 - `--character-spacing-mm=<n>`: Character spacing in millimeters (`>= 0`).
 - `--line-spacing-mm=<n>`: Line spacing in millimeters (`> 0`).
@@ -127,6 +152,8 @@ Flags:
 - `--print-area-width-mm=<n>`: Print area width in millimeters (`> 0`).
 - `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
 - `--dry-run`: Build and inspect output without sending a print job.
+- `--help`: Show CLI usage.
+- `--version`: Show package version.
 
 ## Markdown Images
 
@@ -181,7 +208,7 @@ Global layout options are supported for each generated receipt (module + CLI):
 
 Values are in millimeters and converted internally to ESC/POS units for TM-T88V workflows.
 
-Not included in this change: tab stops, absolute positioning, and relative positioning.
+Currently unsupported: tab stops, absolute positioning, and relative positioning.
 
 ## Code Pages and Text Encoding
 
@@ -190,15 +217,15 @@ This is required for receipt printers because selecting a code page command (`ES
 
 Default code page:
 
-- `cp850` (ESC/POS `ESC t 2`)
+- `cp858` (ESC/POS `ESC t 19`)
 
 CLI:
 
-- `--code-page=cp850`
+- `--code-page=cp858`
 
 Module:
 
-- `markdownToEscpos(markdown, { codePage: "cp850" })`
+- `markdownToEscpos(markdown, { codePage: "cp858" })`
 
 Fallback behavior for unencodable characters:
 
@@ -206,11 +233,20 @@ Fallback behavior for unencodable characters:
 2. If not encodable, apply ASCII-safe normalization fallback.
 3. If still not encodable, emit `?`.
 
+Show supported code pages from CLI:
+
+```bash
+posprint --list-code-pages
+```
+
 ### Supported code pages
 
-| Name  | CLI value | ESC/POS ID (`ESC t n`) | Notes |
-|-------|-----------|------------------------|-------|
-| CP850 | `cp850`   | `2`                    | Default Western code page in this release |
+| Name   | CLI value | ESC/POS ID (`ESC t n`) | Notes |
+|--------|-----------|------------------------|-------|
+| CP437  | `cp437`   | `0`                    | Legacy US DOS table |
+| CP850  | `cp850`   | `2`                    | Western Europe DOS table |
+| CP858  | `cp858`   | `19`                   | Default; CP850 variant with `€` |
+| CP1252 | `cp1252`  | `16`                   | Windows Western punctuation/quotes |
 
 Printer selection order:
 
