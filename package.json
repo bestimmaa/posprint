@@ -32,6 +32,7 @@
     "print:dry": "node src/print-cli.js --dry-run",
     "print:test": "node src/print-cli.js --markdown-file=tests/fixtures/markdown-showcase.md",
     "print:test:dry": "node src/print-cli.js --markdown-file=tests/fixtures/markdown-showcase.md --dry-run",
+    "release:commit-tag": "git add package.json package-lock.json CHANGELOG.md && VERSION=$(node -p \"require('./package.json').version\") && git commit -m \"chore(release): v${VERSION}\" && git tag \"v${VERSION}\"",
     "prepublishOnly": "npm test"
   },
   "dependencies": {

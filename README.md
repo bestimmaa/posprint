@@ -323,6 +323,10 @@ Project scripts for ESC/POS and spooler verification:
 - `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` and `--dry-run`.
 - `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/markdown-showcase.md` to submit a RAW print job.
 
+Release helper script:
+
+- `npm run release:commit-tag` stages `package.json`, `package-lock.json`, and `CHANGELOG.md`, creates commit `chore(release): vMAJOR.MINOR.PATCH`, and creates matching tag `vMAJOR.MINOR.PATCH` on that commit.
+
 ## Bitbucket Pipeline Artifact Build
 
 - Pipeline runs on all branch pushes.
