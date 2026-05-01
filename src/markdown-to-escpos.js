@@ -191,6 +191,11 @@ function collectInlineRange(children, startIndex, openType, closeType) {
   };
 }
 
+function normalizePrintableText(value) {
+  return String(value || "")
+    .replace(/[‐‑‒–—―−]/g, "-");
+}
+
 function normalizeSegments(segments) {
   const out = [];
 
@@ -199,7 +204,7 @@ function normalizeSegments(segments) {
       continue;
     }
 
-    const value = String(segment.text);
+    const value = normalizePrintableText(segment.text);
     if (!value) {
       continue;
     }

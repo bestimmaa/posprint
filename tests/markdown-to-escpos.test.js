@@ -229,6 +229,19 @@ test("wraps paragraph lines by charsPerLine", () => {
   assert.equal(Buffer.from(out).length > 0, true);
 });
 
+test("normalizes unicode dash characters in inline text to ASCII hyphen", () => {
+  const out = Buffer.from(markdownToEscpos("US–German and anti‑Semitic\n", {
+    charsPerLine: 42,
+    strictMarkdown: false
+  }));
+  const text = out.toString("utf8");
+
+  assert.equal(text.includes("US-German"), true);
+  assert.equal(text.includes("anti-Semitic"), true);
+  assert.equal(text.includes("US–German"), false);
+  assert.equal(text.includes("anti‑Semitic"), false);
+});
+
 test("best-effort mode degrades inline HTML to text", () => {
   const out = markdownToEscpos("before <span>x</span> after", {
     charsPerLine: 42,
