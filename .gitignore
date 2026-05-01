@@ -4,3 +4,4 @@ node_modules/
 tmp/
 .worktrees/
 docs/superpowers/
+.opencode
