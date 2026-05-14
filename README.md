@@ -81,7 +81,7 @@ printReceipt().catch((error) => {
 });
 ```
 
-Direct CUPS URI printing (linux/macOS):
+Direct IPP/IPPS URI printing (Windows, linux, macOS):
 
 ```js
 const { markdownToEscpos, printRawToPrinterUri } = require("posprint");
@@ -141,7 +141,7 @@ Flags:
 - `--markdown-file=<path>`: Read receipt content from a markdown file.
 - `--markdown="..."`: Pass markdown inline as a single argument.
 - `--printer="Printer Name"`: Target an exact local printer queue.
-- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to a CUPS URI (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
+- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to an IPP/IPPS printer URI on Windows, Linux, or macOS (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
 - `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
 - `--code-page=<name>`: ESC/POS code page name (default: `cp858`).
 - `--list-code-pages`: Print supported code pages as a table (`name` + ESC/POS id) and as canonical names for scripting.
@@ -359,13 +359,14 @@ Release helper script:
 - Epson TM-T88V installed as a Windows printer.
 - Printer queue available to the current user session.
 - RAW printing enabled through the Windows spooler path.
+- For `--printer-uri`, an IPP/IPPS-reachable printer endpoint (for example `ipp://host:631/printers/queue`).
 
 ## Linux/macOS Requirements
 
 - Linux or macOS machine with Node.js 20+.
 - CUPS client tooling installed (`lpstat`, `lp`, and/or `lpr`).
 - Local queue printing uses discovered queues from the current user session.
-- URI printing uses CUPS `lp` with raw mode (for example: `lp -h host:port -d queue -o raw`).
+- URI printing uses IPP/IPPS endpoints (for example: `ipp://host:631/printers/queue`).
 - ESC/POS is sent in raw mode.
 
 ## License

@@ -16,7 +16,7 @@ function formatHelp() {
     "  --markdown-file=<path>   Read markdown from file",
     "  --markdown=<text>        Read markdown inline",
     "  --printer=<name>         Select printer",
-    "  --printer-uri=<uri>      Print directly to CUPS URI (ipp://...)",
+    "  --printer-uri=<uri>      Print directly to IPP/IPPS URI (ipp://...)",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
     "  --font=A|B|C             Select ESC/POS font",
     "  --character-spacing-mm=<n>  Character spacing in mm (>= 0)",
@@ -68,7 +68,7 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
   if (parsed.protocol === "http:" || parsed.protocol === "https:") {
     const convertedProtocol = parsed.protocol === "http:" ? "ipp:" : "ipps:";
     const convertedUri = `${convertedProtocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
-    warn(`--printer-uri auto-converted from ${parsed.protocol}// to ${convertedProtocol}// for CUPS printing.`);
+    warn(`--printer-uri auto-converted from ${parsed.protocol}// to ${convertedProtocol}// for IPP printing.`);
     parsed = new URL(convertedUri);
   }
 

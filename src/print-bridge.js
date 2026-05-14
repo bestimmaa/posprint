@@ -3,6 +3,7 @@
 const os = require("node:os");
 const windows = require("./windows-raw-printer");
 const linux = require("./linux-cups-printer");
+const ipp = require("./ipp-printer");
 
 function assertSupportedPlatform(platform) {
   if (platform !== "win32" && platform !== "linux" && platform !== "darwin") {
@@ -10,7 +11,7 @@ function assertSupportedPlatform(platform) {
   }
 }
 
-function createPrintBridge({ platform = os.platform, windows: win = windows, linux: lin = linux } = {}) {
+function createPrintBridge({ platform = os.platform, windows: win = windows, linux: lin = linux, ipp: uri = ipp } = {}) {
   async function listPrinters() {
     const platformName = platform();
     assertSupportedPlatform(platformName);
@@ -37,11 +38,7 @@ function createPrintBridge({ platform = os.platform, windows: win = windows, lin
     const platformName = platform();
     assertSupportedPlatform(platformName);
 
-    if (platformName === "win32") {
-      throw new Error("Printer URI mode is not supported on win32.");
-    }
-
-    return lin.printRawToPrinterUri(printerUri, data);
+    return uri.printRawToPrinterUri(printerUri, data);
   }
 
   return { listPrinters, printRaw, printRawToPrinterUri };

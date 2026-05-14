@@ -262,3 +262,24 @@ test("main auto-converts http printer-uri to ipp", async () => {
   assert.match(warnings[0], /auto-converted/i);
 });
 
+test("main prints via printer-uri on win32 and skips listPrinters", async () => {
+  let uriCall = null;
+
+  const result = await main(
+    ["--markdown=# hi", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"],
+    {
+      platform: () => "win32",
+      listPrinters: async () => {
+        throw new Error("should not list printers when --printer-uri is set");
+      },
+      printRawToPrinterUri: async (uri, data) => {
+        uriCall = { uri, bytes: data.length };
+      }
+    }
+  );
+
+  assert.equal(result.printerUri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.equal(typeof uriCall.bytes, "number");
+});
+
