@@ -2,7 +2,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { parsePrinterUri, printRawToPrinterUri } = require("../src/ipp-printer");
+const { parsePrinterUri } = require("../src/printer-uri");
+const { printRawToPrinterUri } = require("../src/ipp-printer");
 
 test("parsePrinterUri accepts ipp URI with /printers/<queue>", () => {
   const parsed = parsePrinterUri("ipp://taiga.local:631/printers/TM-T88V");
@@ -64,7 +65,9 @@ test("printRawToPrinterUri sends Print-Job with expected attributes", async () =
   assert.equal(call.uri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(call.message.data, payload);
   assert.equal(call.message["operation-attributes-tag"]["document-format"], "application/octet-stream");
+  assert.equal(result.backend, "ipp");
   assert.equal(result.command, "ipp");
+  assert.equal(result.printerUri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(result.printerName, "TM-T88V");
 });
 
@@ -117,6 +120,7 @@ test("printRawToPrinterUri accepts statusCode response shape", async () => {
     ippClient: fakeIpp
   });
 
+  assert.equal(result.backend, "ipp");
   assert.equal(result.command, "ipp");
 });
 

@@ -17,11 +17,27 @@ test("bridge dispatches listPrinters to linux backend", async () => {
 test("bridge dispatches printRaw to windows backend", async () => {
   const bridge = createPrintBridge({
     platform: () => "win32",
-    windows: { printRawToWindowsPrinter: async () => ({ backend: "win" }) },
-    linux: { printRawToLinuxPrinter: async () => ({ backend: "lin" }) }
+    windows: {
+      printRawToWindowsPrinter: async () => ({
+        backend: "windows-raw",
+        printerName: "P",
+        tmpFile: "C:/temp/job.bin"
+      })
+    },
+    linux: {
+      printRawToLinuxPrinter: async () => ({
+        backend: "cups-local",
+        command: "lp",
+        printerName: "P"
+      })
+    }
   });
 
-  assert.deepEqual(await bridge.printRaw("P", Buffer.from("x")), { backend: "win" });
+  assert.deepEqual(await bridge.printRaw("P", Buffer.from("x")), {
+    backend: "windows-raw",
+    printerName: "P",
+    tmpFile: "C:/temp/job.bin"
+  });
 });
 
 test("bridge accepts darwin and lists printers through cups backend", async () => {

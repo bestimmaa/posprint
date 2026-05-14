@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
-const { resolveMarkdownInput, main, formatHelp, validatePlatform } = require("../src/print-cli");
+const { resolveMarkdownInput, main, formatHelp, validatePlatform, validatePrinterUri } = require("../src/print-cli");
 
 test("getArgValue reads --flag=value", () => {
   assert.equal(getArgValue(["--markdown=hi"], "--markdown"), "hi");
@@ -260,6 +260,48 @@ test("main auto-converts http printer-uri to ipp", async () => {
   assert.equal(typeof uriCall.bytes, "number");
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /auto-converted/i);
+});
+
+test("validatePrinterUri upgrades http and warns using CLI warning format", () => {
+  const warnings = [];
+
+  const normalized = validatePrinterUri("http://taiga.local:631/printers/TM-T88V", {
+    warn: (message) => warnings.push(message)
+  });
+
+  assert.equal(normalized, "ipp://taiga.local:631/printers/TM-T88V");
+  assert.deepEqual(
+    warnings,
+    ["--printer-uri auto-converted from http:// to ipp:// for IPP printing."]
+  );
+});
+
+test("validatePrinterUri upgrades https and warns using CLI warning format", () => {
+  const warnings = [];
+
+  const normalized = validatePrinterUri("https://taiga.local/printers/TM-T88V", {
+    warn: (message) => warnings.push(message)
+  });
+
+  assert.equal(normalized, "ipps://taiga.local/printers/TM-T88V");
+  assert.deepEqual(
+    warnings,
+    ["--printer-uri auto-converted from https:// to ipps:// for IPP printing."]
+  );
+});
+
+test("validatePrinterUri remaps invalid URI to CLI message", () => {
+  assert.throws(
+    () => validatePrinterUri("not a uri"),
+    /Invalid --printer-uri value\. Use ipp:\/\/host:port\/printers\/queue\./
+  );
+});
+
+test("validatePrinterUri rejects unsupported schemes", () => {
+  assert.throws(
+    () => validatePrinterUri("ftp://taiga.local/printers/TM-T88V"),
+    /Unsupported --printer-uri scheme\. Use ipp:\/\/ or ipps:\/\//
+  );
 });
 
 test("main prints via printer-uri on win32 and skips listPrinters", async () => {

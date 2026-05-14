@@ -122,7 +122,7 @@ async function printRawToWindowsPrinter(printerName, data) {
   ].join("\n");
 
   await runPowerShell(script, 30000);
-  return { tmpFile };
+  return { backend: "windows-raw", printerName, tmpFile };
 }
 
 module.exports = {

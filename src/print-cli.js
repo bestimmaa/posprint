@@ -6,6 +6,7 @@ const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { markdownToEscpos, listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
 const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
+const { normalizePrinterUri, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -57,26 +58,27 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
     return printerUri;
   }
 
-  let parsed;
-
   try {
-    parsed = new URL(printerUri);
-  } catch {
-    throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
-  }
+    const { normalizedUri, wasUpgraded } = normalizePrinterUri(printerUri, { allowHttpUpgrade: true });
 
-  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-    const convertedProtocol = parsed.protocol === "http:" ? "ipp:" : "ipps:";
-    const convertedUri = `${convertedProtocol}//${parsed.host}${parsed.pathname}${parsed.search}`;
-    warn(`--printer-uri auto-converted from ${parsed.protocol}// to ${convertedProtocol}// for IPP printing.`);
-    parsed = new URL(convertedUri);
-  }
+    if (wasUpgraded) {
+      const inputProtocol = new URL(printerUri).protocol;
+      const convertedProtocol = inputProtocol === "http:" ? "ipp:" : "ipps:";
+      warn(`--printer-uri auto-converted from ${inputProtocol}// to ${convertedProtocol}// for IPP printing.`);
+    }
 
-  if (parsed.protocol !== "ipp:" && parsed.protocol !== "ipps:") {
-    throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
-  }
+    return normalizedUri;
+  } catch (error) {
+    if (error && error.code === PRINTER_URI_ERROR_CODES.INVALID_URI) {
+      throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
+    }
 
-  return parsed.toString();
+    if (error && error.code === PRINTER_URI_ERROR_CODES.UNSUPPORTED_SCHEME) {
+      throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
+    }
+
+    throw error;
+  }
 }
 
 function parseOptionalMmArg(argv, flag, { min, exclusiveMin = false }) {
