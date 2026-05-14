@@ -38,12 +38,41 @@ test("bridge dispatches printRawToPrinterUri on darwin", async () => {
   const bridge = createPrintBridge({
     platform: () => "darwin",
     windows: {},
-    linux: { printRawToPrinterUri: async () => ({ backend: "cups-uri" }) }
+    linux: {},
+    ipp: { printRawToPrinterUri: async () => ({ backend: "ipp-uri" }) }
   });
 
   assert.deepEqual(
     await bridge.printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from("x")),
-    { backend: "cups-uri" }
+    { backend: "ipp-uri" }
+  );
+});
+
+test("bridge dispatches printRawToPrinterUri on win32", async () => {
+  const bridge = createPrintBridge({
+    platform: () => "win32",
+    windows: {},
+    linux: {},
+    ipp: { printRawToPrinterUri: async () => ({ backend: "ipp-uri" }) }
+  });
+
+  assert.deepEqual(
+    await bridge.printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from("x")),
+    { backend: "ipp-uri" }
+  );
+});
+
+test("bridge dispatches printRawToPrinterUri on linux", async () => {
+  const bridge = createPrintBridge({
+    platform: () => "linux",
+    windows: {},
+    linux: {},
+    ipp: { printRawToPrinterUri: async () => ({ backend: "ipp-uri" }) }
+  });
+
+  assert.deepEqual(
+    await bridge.printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from("x")),
+    { backend: "ipp-uri" }
   );
 });
 
