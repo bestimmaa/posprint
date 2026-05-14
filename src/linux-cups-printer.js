@@ -97,7 +97,7 @@ async function printRawToLinuxPrinter(printerName, data, { spawn = spawnProcess 
 
   try {
     await runCommand("lp", ["-d", printerName, "-o", "raw"], { input: data, spawn });
-    return { command: "lp", printerName };
+    return { backend: "cups-local", command: "lp", printerName };
   } catch (error) {
     if (!isCommandMissing(error)) {
       throw error;
@@ -105,7 +105,7 @@ async function printRawToLinuxPrinter(printerName, data, { spawn = spawnProcess 
   }
 
   await runCommand("lpr", ["-P", printerName, "-o", "raw"], { input: data, spawn });
-  return { command: "lpr", printerName };
+  return { backend: "cups-local", command: "lpr", printerName };
 }
 
 async function printRawToPrinterUri(printerUri, data, { spawn = spawnProcess } = {}) {

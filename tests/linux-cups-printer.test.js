@@ -64,7 +64,11 @@ test("printRawToLinuxPrinter uses lp with raw mode", async () => {
   });
 
   const result = await printRawToLinuxPrinter("EPSON_TM_T88V", Buffer.from([0x1b, 0x40]), { spawn });
-  assert.equal(result.command, "lp");
+  assert.deepEqual(result, {
+    backend: "cups-local",
+    command: "lp",
+    printerName: "EPSON_TM_T88V"
+  });
   assert.equal(called, "lp");
 });
 
@@ -89,7 +93,11 @@ test("printRawToLinuxPrinter falls back to lpr when lp missing", async () => {
   };
 
   const result = await printRawToLinuxPrinter("EPSON_TM_T88V", Buffer.from("x"), { spawn });
-  assert.equal(result.command, "lpr");
+  assert.deepEqual(result, {
+    backend: "cups-local",
+    command: "lpr",
+    printerName: "EPSON_TM_T88V"
+  });
 });
 
 test("parsePrinterUri accepts ipp URI and returns host/queue", () => {

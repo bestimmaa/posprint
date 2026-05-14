@@ -1,31 +1,7 @@
 "use strict";
 
 const ipp = require("ipp");
-
-function parsePrinterUri(printerUri) {
-  let uri;
-
-  try {
-    uri = new URL(printerUri);
-  } catch {
-    throw new Error("Invalid printer URI. Use ipp://host:port/path.");
-  }
-
-  if (uri.protocol !== "ipp:" && uri.protocol !== "ipps:") {
-    throw new Error("Unsupported printer URI scheme. Use ipp:// or ipps://.");
-  }
-
-  const pathSegments = uri.pathname.split("/").filter(Boolean);
-
-  if (pathSegments.length < 2) {
-    throw new Error("Unsupported printer URI path. Use at least two path segments (for example /printers/queue).");
-  }
-
-  return {
-    printerName: decodeURIComponent(pathSegments[pathSegments.length - 1]),
-    normalizedUri: uri.toString()
-  };
-}
+const { parsePrinterUri } = require("./printer-uri");
 
 function getStatusCode(response) {
   return response?.["status-code"] || response?.statusCode || "";
@@ -82,6 +58,7 @@ async function printRawToPrinterUri(printerUri, data, { ippClient = ipp, timeout
   }
 
   return {
+    backend: "ipp",
     command: "ipp",
     printerUri: normalizedUri,
     printerName
@@ -89,6 +66,5 @@ async function printRawToPrinterUri(printerUri, data, { ippClient = ipp, timeout
 }
 
 module.exports = {
-  parsePrinterUri,
   printRawToPrinterUri
 };
