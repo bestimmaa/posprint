@@ -28,6 +28,33 @@ function getWorkflowJobsBlock(workflow) {
   return normalizedWorkflow.slice(jobsIndex + 1);
 }
 
+function getMarkdownSection(markdown, heading) {
+  const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
+  const headingMarker = `\n## ${heading}\n`;
+  const headingIndex = normalizedMarkdown.indexOf(headingMarker);
+
+  assert.notEqual(headingIndex, -1);
+
+  const nextHeadingIndex = normalizedMarkdown.indexOf("\n## ", headingIndex + headingMarker.length);
+
+  if (nextHeadingIndex === -1) {
+    return normalizedMarkdown.slice(headingIndex + 1);
+  }
+
+  return normalizedMarkdown.slice(headingIndex + 1, nextHeadingIndex + 1);
+}
+
+function assertHeadingOrder(content, headings) {
+  for (let index = 0; index < headings.length - 1; index += 1) {
+    const currentIndex = content.indexOf(`\n## ${headings[index]}\n`);
+    const nextIndex = content.indexOf(`\n## ${headings[index + 1]}\n`);
+
+    assert.notEqual(currentIndex, -1);
+    assert.notEqual(nextIndex, -1);
+    assert.equal(currentIndex < nextIndex, true);
+  }
+}
+
 test("package metadata points to public GitHub repo", () => {
   assert.equal(pkg.private, false);
   assert.equal(pkg.name, "@bestimmaa/posprint");
@@ -112,8 +139,59 @@ test("readme documents npm install for module consumers", () => {
   assert.equal(readme.includes("npm install @bestimmaa/posprint"), true);
   assert.equal(readme.includes("npm i -g @bestimmaa/posprint"), true);
   assert.equal(readme.includes("require(\"@bestimmaa/posprint\")"), true);
-  assert.equal(readme.includes("import posprint from \"@bestimmaa/posprint\""), true);
   assert.equal(readme.includes("posprint --help"), true);
+});
+
+test("readme links to the expanded module api guide", () => {
+  const moduleApiDocPath = path.resolve(__dirname, "..", "docs", "module-api.md");
+  assert.equal(existsSync(moduleApiDocPath), true);
+
+  const moduleApiDoc = readFileSync(moduleApiDocPath, "utf8");
+  const localQueueSection = getMarkdownSection(moduleApiDoc, "CommonJS Local Queue");
+  const printerUriSection = getMarkdownSection(moduleApiDoc, "CommonJS Printer URI");
+  const conversionOnlySection = getMarkdownSection(moduleApiDoc, "CommonJS Conversion Only");
+  const esmSection = getMarkdownSection(moduleApiDoc, "ESM Interop");
+
+  assert.match(
+    readme,
+    /\[[^\]]+\]\(https:\/\/github\.com\/bestimmaa\/posprint\/blob\/main\/docs\/module-api\.md\)/
+  );
+  assert.equal(
+    /\[[^\]]+\]\((?:\/|\.\.\/|\.\/)?docs\/module-api\.md\)/.test(readme),
+    false
+  );
+  assert.equal(
+    /^\[[^\]]+\]:\s*(?:\/|\.\.\/|\.\/)?docs\/module-api\.md\s*$/m.test(readme),
+    false
+  );
+  assert.match(moduleApiDoc, /Package entry point:\s*`require\("@bestimmaa\/posprint"\)`/);
+  assert.match(moduleApiDoc, /^Exports:\s*$/m);
+
+  for (const exportName of [
+    "markdownToEscpos",
+    "listPrinters",
+    "printRaw",
+    "printRawToPrinterUri",
+    "printRawToWindowsPrinter",
+    "selectPrinterName"
+  ]) {
+    assert.match(moduleApiDoc, new RegExp(`^- \\x60${exportName}\\x60$`, "m"));
+  }
+
+  assert.match(localQueueSection, /require\("@bestimmaa\/posprint"\)/);
+  assert.match(localQueueSection, /listPrinters/);
+  assert.match(localQueueSection, /selectPrinterName/);
+  assert.match(localQueueSection, /printRaw/);
+
+  assert.match(printerUriSection, /printRawToPrinterUri/);
+  assert.match(printerUriSection, /ipp:\/\/taiga\.local:631\/printers\/TM-T88V/);
+
+  assert.match(conversionOnlySection, /markdownToEscpos/);
+  assert.match(conversionOnlySection, /codePage:\s*"cp858"/);
+  assert.match(conversionOnlySection, /font:\s*"B"/);
+
+  assert.match(esmSection, /import posprint from "@bestimmaa\/posprint"/);
+  assert.match(esmSection, /const \{ markdownToEscpos \} = posprint;/);
 });
 
 test("readme stays GitHub-first and avoids public Bitbucket release docs", () => {
@@ -128,17 +206,68 @@ test("readme public usage sections do not require repo-only test fixtures", () =
   assert.equal(publicReadmeContent.includes("tests/fixtures/"), false);
 });
 
-test("readme documents the new local release workflow", () => {
-  assert.equal(readme.includes("npm run release -- patch"), true);
-  assert.equal(readme.includes("npm publish --access public"), true);
-  assert.equal(readme.includes("git remote add github https://github.com/bestimmaa/posprint.git"), true);
-  assert.equal(readme.includes("git branch -M main"), true);
-  assert.equal(readme.includes("git remote -v"), true);
-  assert.equal(readme.includes("git push origin main:main --follow-tags"), true);
-  assert.equal(readme.includes("git push github main:main --follow-tags"), true);
-  assert.equal(readme.includes("update the GitHub repository default branch to `main`"), true);
-  assert.equal(readme.includes("## [next-version]"), true);
-  assert.equal(readme.indexOf("git remote add github https://github.com/bestimmaa/posprint.git") < readme.indexOf("git push github main:main --follow-tags"), true);
+test("readme links to release workflow instead of embedding it", () => {
+  assert.equal(
+    readme.includes("https://github.com/bestimmaa/posprint/blob/main/docs/release.md"),
+    true
+  );
+  assert.equal(
+    /\[[^\]]+\]\((?:\/|\.\.\/|\.\/)?docs\/release\.md\)/.test(readme),
+    false
+  );
+  assert.equal(
+    /^\[[^\]]+\]:\s*(?:\/|\.\.\/|\.\/)?docs\/release\.md\s*$/m.test(readme),
+    false
+  );
+  assert.equal(readme.includes("npm run release -- patch"), false);
+  assert.equal(readme.includes("npm publish --access public"), false);
+  assert.equal(readme.includes("git push github main:main --follow-tags"), false);
+  assert.equal(readme.includes("## [next-version]"), false);
+});
+
+test("readme uses a landing-page structure for public users", () => {
+  assert.equal(readme.includes("## Contents"), false);
+  assert.equal(readme.includes("## What it does"), true);
+  assert.equal(readme.includes("## Quick Start"), true);
+  assert.equal(readme.includes("## CLI"), true);
+  assert.equal(readme.includes("## Module API"), true);
+  assert.equal(readme.includes("## Features"), true);
+  assert.equal(readme.includes("## Platform Support"), true);
+
+  assertHeadingOrder(normalizedReadme, [
+    "What it does",
+    "Install",
+    "Quick Start",
+    "CLI",
+    "Module API",
+    "Features",
+    "Platform Support",
+    "Development",
+    "License"
+  ]);
+
+  assert.equal(readme.includes("posprint --dry-run --markdown=\"# Hello\\n\\n- Espresso\\n- Croissant\""), true);
+  assert.equal(readme.includes("--character-spacing-mm=<n>"), true);
+  assert.equal(readme.includes("--line-spacing-mm=<n>"), true);
+  assert.equal(readme.includes("--left-margin-mm=<n>"), true);
+  assert.equal(readme.includes("--print-area-width-mm=<n>"), true);
+  assert.equal(readme.includes("This takes precedence over `--printer`"), true);
+  assert.equal(readme.includes("http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning"), true);
+});
+
+test("release guide documents the maintainer workflow", () => {
+  const releaseDocPath = path.resolve(__dirname, "..", "docs", "release.md");
+  assert.equal(existsSync(releaseDocPath), true);
+
+  const releaseDoc = readFileSync(releaseDocPath, "utf8");
+
+  assert.equal(releaseDoc.includes("npm run release -- patch"), true);
+  assert.equal(releaseDoc.includes("npm publish --access public"), true);
+  assert.equal(releaseDoc.includes("git branch -M main"), true);
+  assert.equal(releaseDoc.includes("git remote add github https://github.com/bestimmaa/posprint.git"), true);
+  assert.equal(releaseDoc.includes("git push origin main:main --follow-tags"), true);
+  assert.equal(releaseDoc.includes("git push github main:main --follow-tags"), true);
+  assert.equal(releaseDoc.includes("## [next-version]"), true);
 });
 
 test("gitignore excludes npm pack tarballs", () => {
