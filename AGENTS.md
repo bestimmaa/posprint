@@ -2,6 +2,10 @@
 
 This repository provides `posprint`: a Node.js module + CLI for markdown-to-ESC/POS receipt printing (EPSON TM-T88V focused), with Windows RAW spooler and CUPS (Linux/macOS) support.
 
+Public package coordinates:
+- npm: `@bestimmaa/posprint`
+- GitHub: `https://github.com/bestimmaa/posprint`
+
 ## Scope
 - Keep CLI and module behavior practical, testable, and repeatable from the command line.
 - Keep printer-specific validation fixtures in-repo.
@@ -35,6 +39,7 @@ This repository provides `posprint`: a Node.js module + CLI for markdown-to-ESC/
     - `test` test-only changes
     - `chore` tooling/maintenance only
 - Keep source references with URL + capture date when storing external material.
+- Treat the published npm package name and public GitHub repository URL as canonical when updating docs, release notes, and examples.
 - Maintain a changelog for every new release created via `npm version <type>`.
   - Version history source of truth: Git tags in format `vMAJOR.MINOR.PATCH`.
   - Fallback source when tags are missing/incomplete: `package.json` version history.
