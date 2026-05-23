@@ -1,113 +1,131 @@
 "use strict";
 
-const WESTERN_EXTENDED = new Map([
-  ["°", 0xf8],
-  ["ä", 0x84],
-  ["ö", 0x94],
-  ["ü", 0x81],
-  ["Ä", 0x8e],
-  ["Ö", 0x99],
-  ["Ü", 0x9a],
-  ["ß", 0xe1],
-  ["é", 0x82],
-  ["è", 0x8a],
-  ["à", 0x85],
-  ["ñ", 0xa4],
-  ["Ñ", 0xa5]
-]);
+const CP437_UPPER_HALF = [
+  "Ç", "ü", "é", "â", "ä", "à", "å", "ç", "ê", "ë", "è", "ï", "î", "ì", "Ä", "Å",
+  "É", "æ", "Æ", "ô", "ö", "ò", "û", "ù", "ÿ", "Ö", "Ü", "¢", "£", "¥", "₧", "ƒ",
+  "á", "í", "ó", "ú", "ñ", "Ñ", "ª", "º", "¿", "⌐", "¬", "½", "¼", "¡", "«", "»",
+  "░", "▒", "▓", "│", "┤", "╡", "╢", "╖", "╕", "╣", "║", "╗", "╝", "╜", "╛", "┐",
+  "└", "┴", "┬", "├", "─", "┼", "╞", "╟", "╚", "╔", "╩", "╦", "╠", "═", "╬", "╧",
+  "╨", "╤", "╥", "╙", "╘", "╒", "╓", "╫", "╪", "┘", "┌", "█", "▄", "▌", "▐", "▀",
+  "α", "ß", "Γ", "π", "Σ", "σ", "µ", "τ", "Φ", "Θ", "Ω", "δ", "∞", "φ", "ε", "∩",
+  "≡", "±", "≥", "≤", "⌠", "⌡", "÷", "≈", "°", "∙", "·", "√", "ⁿ", "²", "■", "\u00a0"
+];
 
-const CP858_EXTENDED = new Map([...WESTERN_EXTENDED, ["€", 0xd5]]);
+const CP850_UPPER_HALF = [
+  "Ç", "ü", "é", "â", "ä", "à", "å", "ç", "ê", "ë", "è", "ï", "î", "ì", "Ä", "Å",
+  "É", "æ", "Æ", "ô", "ö", "ò", "û", "ù", "ÿ", "Ö", "Ü", "ø", "£", "Ø", "×", "ƒ",
+  "á", "í", "ó", "ú", "ñ", "Ñ", "ª", "º", "¿", "®", "¬", "½", "¼", "¡", "«", "»",
+  "░", "▒", "▓", "│", "┤", "Á", "Â", "À", "©", "╣", "║", "╗", "╝", "¢", "¥", "┐",
+  "└", "┴", "┬", "├", "─", "┼", "ã", "Ã", "╚", "╔", "╩", "╦", "╠", "═", "╬", "¤",
+  "ð", "Ð", "Ê", "Ë", "È", "ı", "Í", "Î", "Ï", "┘", "┌", "█", "▄", "¦", "Ì", "▀",
+  "Ó", "ß", "Ô", "Ò", "õ", "Õ", "µ", "þ", "Þ", "Ú", "Û", "Ù", "ý", "Ý", "¯", "´",
+  "\u00ad", "±", "‗", "¾", "¶", "§", "÷", "¸", "°", "¨", "·", "¹", "³", "²", "■", "\u00a0"
+];
 
-const CP1252_SPECIAL = new Map([
-  ["€", 0x80],
-  ["‚", 0x82],
-  ["ƒ", 0x83],
-  ["„", 0x84],
-  ["…", 0x85],
-  ["†", 0x86],
-  ["‡", 0x87],
-  ["ˆ", 0x88],
-  ["‰", 0x89],
-  ["Š", 0x8a],
-  ["‹", 0x8b],
-  ["Œ", 0x8c],
-  ["Ž", 0x8e],
-  ["‘", 0x91],
-  ["’", 0x92],
-  ["“", 0x93],
-  ["”", 0x94],
-  ["•", 0x95],
-  ["–", 0x96],
-  ["—", 0x97],
-  ["˜", 0x98],
-  ["™", 0x99],
-  ["š", 0x9a],
-  ["›", 0x9b],
-  ["œ", 0x9c],
-  ["ž", 0x9e],
-  ["Ÿ", 0x9f]
-]);
+const CP858_UPPER_HALF = [
+  "Ç", "ü", "é", "â", "ä", "à", "å", "ç", "ê", "ë", "è", "ï", "î", "ì", "Ä", "Å",
+  "É", "æ", "Æ", "ô", "ö", "ò", "û", "ù", "ÿ", "Ö", "Ü", "ø", "£", "Ø", "×", "ƒ",
+  "á", "í", "ó", "ú", "ñ", "Ñ", "ª", "º", "¿", "®", "¬", "½", "¼", "¡", "«", "»",
+  "░", "▒", "▓", "│", "┤", "Á", "Â", "À", "©", "╣", "║", "╗", "╝", "¢", "¥", "┐",
+  "└", "┴", "┬", "├", "─", "┼", "ã", "Ã", "╚", "╔", "╩", "╦", "╠", "═", "╬", "¤",
+  "ð", "Ð", "Ê", "Ë", "È", "€", "Í", "Î", "Ï", "┘", "┌", "█", "▄", "¦", "Ì", "▀",
+  "Ó", "ß", "Ô", "Ò", "õ", "Õ", "µ", "þ", "Þ", "Ú", "Û", "Ù", "ý", "Ý", "¯", "´",
+  "\u00ad", "±", "‗", "¾", "¶", "§", "÷", "¸", "°", "¨", "·", "¹", "³", "²", "■", "\u00a0"
+];
 
-function encodeAsciiAndMap(char, map) {
-  const cp = char.codePointAt(0);
-  if (cp <= 0x7f) {
-    return cp;
-  }
+const CP1252_UPPER_HALF = [
+  "€", "\u0081", "‚", "ƒ", "„", "…", "†", "‡", "ˆ", "‰", "Š", "‹", "Œ", "\u008d", "Ž", "\u008f",
+  "\u0090", "‘", "’", "“", "”", "•", "–", "—", "˜", "™", "š", "›", "œ", "\u009d", "ž", "Ÿ",
+  "\u00a0", "¡", "¢", "£", "¤", "¥", "¦", "§", "¨", "©", "ª", "«", "¬", "\u00ad", "®", "¯",
+  "°", "±", "²", "³", "´", "µ", "¶", "·", "¸", "¹", "º", "»", "¼", "½", "¾", "¿",
+  "À", "Á", "Â", "Ã", "Ä", "Å", "Æ", "Ç", "È", "É", "Ê", "Ë", "Ì", "Í", "Î", "Ï",
+  "Ð", "Ñ", "Ò", "Ó", "Ô", "Õ", "Ö", "×", "Ø", "Ù", "Ú", "Û", "Ü", "Ý", "Þ", "ß",
+  "à", "á", "â", "ã", "ä", "å", "æ", "ç", "è", "é", "ê", "ë", "ì", "í", "î", "ï",
+  "ð", "ñ", "ò", "ó", "ô", "õ", "ö", "÷", "ø", "ù", "ú", "û", "ü", "ý", "þ", "ÿ"
+];
 
-  return map.get(char) ?? null;
+const SMART_DOUBLE_QUOTES = new Set(["“", "”"]);
+const SMART_SINGLE_QUOTES = new Set(["‘", "’"]);
+const UNICODE_DASHES = new Set(["‐", "‑", "‒", "–", "—", "―", "−"]);
+const NON_BREAKING_SPACES = new Set(["\u00a0", "\u202f"]);
+
+function buildUpperHalfMap(chars) {
+  return new Map(chars.map((char, index) => [char, index + 0x80]));
 }
 
-function encodeCp1252(char) {
-  const cp = char.codePointAt(0);
-  if (cp <= 0x7f) {
-    return cp;
-  }
+function createCodePage(name, escposId, upperHalf) {
+  const upperHalfMap = buildUpperHalfMap(upperHalf);
 
-  if (cp >= 0xa0 && cp <= 0xff) {
-    return cp;
-  }
+  return {
+    name,
+    escposId,
+    encodeChar(char) {
+      const cp = char.codePointAt(0);
+      if (cp <= 0x7f) {
+        return cp;
+      }
 
-  return CP1252_SPECIAL.get(char) ?? null;
+      return upperHalfMap.get(char) ?? null;
+    }
+  };
 }
 
 const CODE_PAGES = {
-  cp437: {
-    name: "cp437",
-    escposId: 0,
-    encodeChar(char) {
-      return encodeAsciiAndMap(char, WESTERN_EXTENDED);
-    }
-  },
-  cp850: {
-    name: "cp850",
-    escposId: 2,
-    encodeChar(char) {
-      return encodeAsciiAndMap(char, WESTERN_EXTENDED);
-    }
-  },
-  cp858: {
-    name: "cp858",
-    escposId: 19,
-    encodeChar(char) {
-      return encodeAsciiAndMap(char, CP858_EXTENDED);
-    }
-  },
-  cp1252: {
-    name: "cp1252",
-    escposId: 16,
-    encodeChar(char) {
-      return encodeCp1252(char);
-    }
-  }
+  cp437: createCodePage("cp437", 0, CP437_UPPER_HALF),
+  cp850: createCodePage("cp850", 2, CP850_UPPER_HALF),
+  cp858: createCodePage("cp858", 19, CP858_UPPER_HALF),
+  cp1252: createCodePage("cp1252", 16, CP1252_UPPER_HALF)
 };
 
-function normalizeFallback(value) {
-  return String(value || "")
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[‐‑‒–—―−]/g, "-")
-    .replace(/[\u202F\u00A0]*°/g, " deg")
-    .replace(/[\u202F\u00A0]/g, " ");
+function normalizeException(char) {
+  if (SMART_DOUBLE_QUOTES.has(char)) {
+    return '"';
+  }
+
+  if (SMART_SINGLE_QUOTES.has(char)) {
+    return "'";
+  }
+
+  if (UNICODE_DASHES.has(char)) {
+    return "-";
+  }
+
+  if (NON_BREAKING_SPACES.has(char)) {
+    return " ";
+  }
+
+  return null;
+}
+
+function encodeTextWithMetadata(input, { codePage = "cp858" } = {}) {
+  const page = resolveCodePage(codePage);
+  const bytes = [];
+  const replacements = [];
+
+  for (const char of String(input || "")) {
+    const normalized = normalizeException(char);
+    const source = normalized ?? char;
+
+    if (normalized != null) {
+      replacements.push({ input: char, output: normalized, kind: "normalized" });
+    }
+
+    for (const candidate of source) {
+      const encoded = page.encodeChar(candidate);
+      if (encoded != null) {
+        bytes.push(encoded);
+        continue;
+      }
+
+      bytes.push(0x3f);
+      replacements.push({ input: char, output: "?", kind: "fallback" });
+    }
+  }
+
+  return {
+    bytes: Uint8Array.from(bytes),
+    replacements
+  };
 }
 
 function resolveCodePage(name = "cp858") {
@@ -125,33 +143,15 @@ function getSupportedCodePages() {
   return Object.values(CODE_PAGES).map(({ name, escposId }) => ({ name, escposId }));
 }
 
-function encodeText(input, { codePage = "cp858" } = {}) {
-  const page = resolveCodePage(codePage);
-  const bytes = [];
-
-  for (const char of String(input || "")) {
-    const direct = page.encodeChar(char);
-    if (direct != null) {
-      bytes.push(direct);
-      continue;
-    }
-
-    const fallback = normalizeFallback(char);
-    if (!fallback) {
-      continue;
-    }
-
-    for (const fallbackChar of fallback) {
-      const encoded = page.encodeChar(fallbackChar);
-      bytes.push(encoded != null ? encoded : 0x3f);
-    }
-  }
-
-  return Uint8Array.from(bytes);
+function encodeText(input, options) {
+  return encodeTextWithMetadata(input, options).bytes;
 }
 
-module.exports = {
+const exported = {
   resolveCodePage,
   getSupportedCodePages,
-  encodeText
+  encodeText,
+  encodeTextDetailed: encodeTextWithMetadata
 };
+
+module.exports = exported;

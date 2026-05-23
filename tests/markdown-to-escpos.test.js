@@ -4,7 +4,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { readFileSync } = require("node:fs");
-const { markdownToEscpos, wrapText } = require("../src/markdown-to-escpos");
+const {
+  markdownToEscpos,
+  markdownToEscposDetailed,
+  wrapText
+} = require("../src/markdown-to-escpos");
+const textTranscoder = require("../src/text-transcoder");
 const {
   rasterImage,
   qrCode,
@@ -305,6 +310,45 @@ test("sets ESC/POS international charset and cp858 code page defaults", () => {
   assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x13])), true);
 });
 
+test("markdownToEscposDetailed reports replacement metadata while markdownToEscpos stays byte-only", () => {
+  const markdown = "“A” — λ\n";
+  assert.equal(typeof textTranscoder.encodeTextDetailed, "function");
+  assert.equal(Object.hasOwn(textTranscoder, "__test"), false);
+
+  const detailed = markdownToEscposDetailed(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp437"
+  });
+  const bytesOnly = markdownToEscpos(markdown, {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp437"
+  });
+
+  assert.equal(ArrayBuffer.isView(detailed.bytes), true);
+  assert.deepEqual(Array.from(bytesOnly), Array.from(detailed.bytes));
+  assert.deepEqual(detailed.replacements, [
+    { input: "“", output: '"', kind: "normalized" },
+    { input: "”", output: '"', kind: "normalized" },
+    { input: "—", output: "-", kind: "normalized" },
+    { input: "\u00a0", output: " ", kind: "normalized" },
+    { input: "λ", output: "?", kind: "fallback" }
+  ]);
+  assert.equal(Object.hasOwn(bytesOnly, "replacements"), false);
+});
+
+test("markdown pipeline emits cp858 euro byte with no replacement metadata", () => {
+  const detailed = markdownToEscposDetailed("Total 12.50 €\n", {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp858"
+  });
+
+  assert.notEqual(Buffer.from(detailed.bytes).indexOf(Buffer.from([0xd5])), -1);
+  assert.deepEqual(detailed.replacements, []);
+});
+
 test("encodes representative western characters using cp850 bytes", () => {
   const out = Buffer.from(markdownToEscpos("°äöüßéèàñ", {
     charsPerLine: 42,
@@ -313,6 +357,25 @@ test("encodes representative western characters using cp850 bytes", () => {
   }));
 
   assert.notEqual(out.indexOf(Buffer.from([0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4])), -1);
+});
+
+test("markdown pipeline preserves degree sign and broader cp850 coverage without deg rewrite", () => {
+  const detailed = markdownToEscposDetailed("Weather Report — Berlin\nTemperature: 21.5 °C\n°äöüßéèàñ\n", {
+    charsPerLine: 42,
+    strictMarkdown: false,
+    codePage: "cp850"
+  });
+  const out = Buffer.from(detailed.bytes);
+
+  assert.notEqual(out.indexOf(Buffer.from("Weather Report - Berlin", "ascii")), -1);
+  assert.notEqual(out.indexOf(Buffer.from("Temperature: 21.5 ", "ascii")), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0xf8, 0x43])), -1);
+  assert.notEqual(out.indexOf(Buffer.from([0xf8, 0x84, 0x94, 0x81, 0xe1, 0x82, 0x8a, 0x85, 0xa4])), -1);
+  assert.equal(out.indexOf(Buffer.from("degC", "ascii")), -1);
+  assert.deepEqual(detailed.replacements, [
+    { input: "—", output: "-", kind: "normalized" },
+    { input: " ", output: " ", kind: "normalized" }
+  ]);
 });
 
 test("fixture with western chars encodes expected cp850 bytes", () => {
@@ -344,7 +407,7 @@ test("magic-smart-quotes-italic fixture prints italic sections and normalizes sm
   assert.equal(out.includes(Buffer.from('"Strange times make for strange allies."', "ascii")), true);
 });
 
-test("uses cp1252 ESC/POS code-page id and bytes when selected", () => {
+test("uses cp1252 ESC/POS code-page id while normalizing smart quotes to ASCII", () => {
   const out = Buffer.from(markdownToEscpos("\u201cHi\u201d", {
     charsPerLine: 42,
     strictMarkdown: false,
@@ -352,7 +415,7 @@ test("uses cp1252 ESC/POS code-page id and bytes when selected", () => {
   }));
 
   assert.equal(out.includes(Buffer.from([0x1b, 0x74, 0x10])), true);
-  assert.notEqual(out.indexOf(Buffer.from([0x93, 0x48, 0x69, 0x94])), -1);
+  assert.notEqual(out.indexOf(Buffer.from('"Hi"', "ascii")), -1);
 });
 
 test("falls back to '?' when char is not encodable in cp850", () => {

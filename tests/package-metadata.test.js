@@ -8,6 +8,25 @@ const pkg = require("../package.json");
 const readmePath = path.resolve(__dirname, "..", "README.md");
 const readme = readFileSync(readmePath, "utf8");
 const normalizedReadme = readme.replace(/\r\n/g, "\n");
+const moduleApiDocPath = path.resolve(__dirname, "..", "docs", "module-api.md");
+const moduleApiDoc = readFileSync(moduleApiDocPath, "utf8");
+const normalizedModuleApiDoc = moduleApiDoc.replace(/\r\n/g, "\n");
+
+const CODE_PAGE_BEHAVIOR_SECTION = [
+  "Supported code pages are `cp437`, `cp850`, `cp858`, and `cp1252`.",
+  "",
+  "Text conversion only normalizes these exceptions before encoding:",
+  "",
+  "- smart quotes to ASCII quotes",
+  "- Unicode dashes to `-`",
+  "- non-breaking spaces to regular spaces",
+  "",
+  "Other unsupported characters become `?`.",
+  "",
+  "- The CLI warns when fallback replacement occurs.",
+  "- Module conversion stays silent by default.",
+  ""
+].join("\n");
 
 function getPublicReadmeContent() {
   const developmentHeading = "\n## Development\n";
@@ -143,10 +162,7 @@ test("readme documents npm install for module consumers", () => {
 });
 
 test("readme links to the expanded module api guide", () => {
-  const moduleApiDocPath = path.resolve(__dirname, "..", "docs", "module-api.md");
   assert.equal(existsSync(moduleApiDocPath), true);
-
-  const moduleApiDoc = readFileSync(moduleApiDocPath, "utf8");
   const localQueueSection = getMarkdownSection(moduleApiDoc, "CommonJS Local Queue");
   const printerUriSection = getMarkdownSection(moduleApiDoc, "CommonJS Printer URI");
   const conversionOnlySection = getMarkdownSection(moduleApiDoc, "CommonJS Conversion Only");
@@ -192,6 +208,17 @@ test("readme links to the expanded module api guide", () => {
 
   assert.match(esmSection, /import posprint from "@bestimmaa\/posprint"/);
   assert.match(esmSection, /const \{ markdownToEscpos \} = posprint;/);
+});
+
+test("public docs describe code page fallback behavior consistently", () => {
+  const readmeBehaviorSection = getMarkdownSection(normalizedReadme, "Text Conversion Behavior");
+  const moduleApiBehaviorSection = getMarkdownSection(normalizedModuleApiDoc, "Text Conversion Behavior");
+  const readmeModuleApiSection = getMarkdownSection(normalizedReadme, "Module API");
+  const expectedBehaviorSection = `## Text Conversion Behavior\n\n${CODE_PAGE_BEHAVIOR_SECTION}`.trimEnd();
+
+  assert.equal(readmeBehaviorSection.trimEnd(), expectedBehaviorSection);
+  assert.equal(moduleApiBehaviorSection.trimEnd(), expectedBehaviorSection);
+  assert.equal(readmeModuleApiSection.includes("### Text Conversion Behavior"), false);
 });
 
 test("readme stays GitHub-first and avoids public Bitbucket release docs", () => {
