@@ -156,6 +156,8 @@ Linux/macOS:
 - Local queue printing through the current user session
 - Direct URI printing for IPP/IPPS endpoints
 
+For a compatibility overview and support caveats, see [SUPPORTED_PRINTERS.md](./SUPPORTED_PRINTERS.md).
+
 ## Development
 
 Install repository dependencies:
