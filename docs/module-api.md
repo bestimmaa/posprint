@@ -11,6 +11,21 @@ Exports:
 - `printRawToWindowsPrinter`
 - `selectPrinterName`
 
+## Text Conversion Behavior
+
+Supported code pages are `cp437`, `cp850`, `cp858`, and `cp1252`.
+
+Text conversion only normalizes these exceptions before encoding:
+
+- smart quotes to ASCII quotes
+- Unicode dashes to `-`
+- non-breaking spaces to regular spaces
+
+Other unsupported characters become `?`.
+
+- The CLI warns when fallback replacement occurs.
+- Module conversion stays silent by default.
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:

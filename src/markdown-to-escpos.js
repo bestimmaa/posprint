@@ -22,7 +22,7 @@ const {
   printAreaWidth
 } = require("./escpos-builder");
 const { imageTokenToRaster } = require("./image-to-escpos");
-const { encodeText, resolveCodePage } = require("./text-transcoder");
+const { encodeText, encodeTextDetailed, resolveCodePage } = require("./text-transcoder");
 
 const LINE_FEED = Uint8Array.from([0x0a]);
 
@@ -71,17 +71,27 @@ function wrapText(text, width) {
   return lines.length ? lines : [""];
 }
 
-function encodeEscposText(value, codePageName) {
-  return encodeText(value, { codePage: codePageName });
+function encodeEscposTextDetailed(value, codePageName) {
+  return encodeTextDetailed(value, { codePage: codePageName });
 }
 
-function encodedLine(value, codePageName) {
-  return concat([encodeEscposText(value, codePageName), LINE_FEED]);
+function encodeEscposText(value, codePageName, replacements = null) {
+  if (!Array.isArray(replacements)) {
+    return encodeText(value, { codePage: codePageName });
+  }
+
+  const encoded = encodeEscposTextDetailed(value, codePageName);
+  replacements.push(...encoded.replacements);
+  return encoded.bytes;
 }
 
-function renderWrappedPlainText(text, charsPerLine, codePageName) {
+function encodedLine(value, codePageName, replacements = null) {
+  return concat([encodeEscposText(value, codePageName, replacements), LINE_FEED]);
+}
+
+function renderWrappedPlainText(text, charsPerLine, codePageName, replacements = null) {
   const lines = wrapText(text, charsPerLine);
-  return lines.map((value) => encodedLine(value, codePageName));
+  return lines.map((value) => encodedLine(value, codePageName, replacements));
 }
 
 function renderLink(label, href) {
@@ -444,13 +454,13 @@ function splitSegmentsByWidth(segments, width) {
   return lines;
 }
 
-function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
+function renderStyledLine(lineSegments, chunks, codePageName, prefix = "", replacements = null) {
   const parts = [];
   let activeBold = false;
   let activeItalic = false;
 
   if (prefix) {
-    parts.push(encodeEscposText(prefix, codePageName));
+    parts.push(encodeEscposText(prefix, codePageName, replacements));
   }
 
   for (const segment of normalizeSegments(lineSegments)) {
@@ -467,7 +477,7 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
       activeItalic = segmentItalic;
     }
 
-    parts.push(encodeEscposText(segment.text, codePageName));
+    parts.push(encodeEscposText(segment.text, codePageName, replacements));
   }
 
   if (activeBold) {
@@ -482,7 +492,7 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "") {
   chunks.push(concat(parts));
 }
 
-function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "") {
+function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "", replacements = null) {
   const safePrefix = String(prefix || "");
   const rowWidth = Math.max(1, charsPerLine - safePrefix.length);
   const rows = splitSegmentsByBreaks(segments);
@@ -491,12 +501,12 @@ function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, pre
     const wrapped = splitSegmentsByWidth(row, rowWidth);
 
     for (const wrappedLine of wrapped) {
-      renderStyledLine(wrappedLine, chunks, codePageName, safePrefix);
+      renderStyledLine(wrappedLine, chunks, codePageName, safePrefix, replacements);
     }
   }
 }
 
-function renderHeading(level, text, chunks, charsPerLine, codePageName) {
+function renderHeading(level, text, chunks, charsPerLine, codePageName, replacements = null) {
   if (level === 1) {
     chunks.push(align("center"), bold(true), size(1, 1));
   } else if (level === 2) {
@@ -506,27 +516,27 @@ function renderHeading(level, text, chunks, charsPerLine, codePageName) {
   }
 
   for (const wrapped of wrapText(text, charsPerLine)) {
-    chunks.push(encodedLine(wrapped, codePageName));
+    chunks.push(encodedLine(wrapped, codePageName, replacements));
   }
 
-  chunks.push(size(0, 0), bold(false), align("left"), encodedLine("", codePageName));
+  chunks.push(size(0, 0), bold(false), align("left"), encodedLine("", codePageName, replacements));
 }
 
-function renderParagraph(text, chunks, charsPerLine, codePageName) {
+function renderParagraph(text, chunks, charsPerLine, codePageName, replacements = null) {
   const rows = String(text || "").split(/\r?\n/);
   for (const row of rows) {
-    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName));
+    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName, replacements));
   }
-  chunks.push(encodedLine("", codePageName));
+  chunks.push(encodedLine("", codePageName, replacements));
 }
 
-function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "") {
+function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null) {
   const segments = inlineToSegments(children, strictMarkdown);
-  renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix);
-  chunks.push(encodedLine("", codePageName));
+  renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix, replacements);
+  chunks.push(encodedLine("", codePageName, replacements));
 }
 
-function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "") {
+function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null) {
   const buffered = [];
   const inlineChildren = Array.isArray(children) ? children : [];
 
@@ -535,7 +545,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
       return;
     }
     const segments = inlineToSegments(buffered, strictMarkdown);
-    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix);
+    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix, replacements);
     buffered.length = 0;
   }
 
@@ -680,12 +690,12 @@ function renderRule(chunks, charsPerLine) {
   chunks.push(line("-".repeat(Math.max(8, Math.min(charsPerLine, 42)))));
 }
 
-function renderCodeBlock(text, chunks, charsPerLine, codePageName) {
+function renderCodeBlock(text, chunks, charsPerLine, codePageName, replacements = null) {
   const rows = String(text || "").split(/\r?\n/);
   for (const row of rows) {
-    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName));
+    chunks.push(...renderWrappedPlainText(row, charsPerLine, codePageName, replacements));
   }
-  chunks.push(encodedLine("", codePageName));
+  chunks.push(encodedLine("", codePageName, replacements));
 }
 
 function toDots(mm) {
@@ -744,13 +754,14 @@ function parseLayoutOptions(options = {}) {
   return out;
 }
 
-function markdownToEscpos(markdown, options = {}) {
+function markdownToEscposDetailed(markdown, options = {}) {
   const charsPerLine = Number.isInteger(options.charsPerLine) ? options.charsPerLine : 42;
   const strictMarkdown = Boolean(options.strictMarkdown);
   const selectedCodePage = resolveCodePage(options.codePage || "cp858");
   const md = new MarkdownIt({ html: true, linkify: true, breaks: false });
   const tokens = md.parse(String(markdown || ""), {});
   const chunks = [init(), setInternationalCharset(0), setCodePage(selectedCodePage.escposId)];
+  const replacements = [];
   const layoutOptions = parseLayoutOptions(options);
 
   if (layoutOptions.font) {
@@ -785,7 +796,7 @@ function markdownToEscpos(markdown, options = {}) {
       const level = Number(token.tag.slice(1));
       const inline = tokens[i + 1];
       const text = inline && inline.type === "inline" ? inlineToText(inline.children, strictMarkdown) : "";
-      renderHeading(level, text, chunks, charsPerLine, selectedCodePage.name);
+      renderHeading(level, text, chunks, charsPerLine, selectedCodePage.name, replacements);
       i += 2;
       continue;
     }
@@ -813,7 +824,8 @@ function markdownToEscpos(markdown, options = {}) {
             charsPerLine,
             strictMarkdown,
             selectedCodePage.name,
-            `${quotePrefix}${getListIndent(listItemDepth)}  `
+            `${quotePrefix}${getListIndent(listItemDepth)}  `,
+            replacements
           );
           chunks.push(line(""));
           i += 2;
@@ -829,13 +841,13 @@ function markdownToEscpos(markdown, options = {}) {
           currentListItem.hasRenderedContent = true;
         }
 
-        renderWrappedSegments(segments, chunks, charsPerLine, selectedCodePage.name, quotePrefix);
+        renderWrappedSegments(segments, chunks, charsPerLine, selectedCodePage.name, quotePrefix, replacements);
         chunks.push(line(""));
         i += 2;
         continue;
       }
 
-      renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, quotePrefix);
+      renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, quotePrefix, replacements);
       chunks.push(line(""));
       i += 2;
       continue;
@@ -909,7 +921,7 @@ function markdownToEscpos(markdown, options = {}) {
     }
 
     if (token.type === "fence" || token.type === "code_block") {
-      renderCodeBlock(token.content, chunks, charsPerLine, selectedCodePage.name);
+      renderCodeBlock(token.content, chunks, charsPerLine, selectedCodePage.name, replacements);
       continue;
     }
 
@@ -917,17 +929,25 @@ function markdownToEscpos(markdown, options = {}) {
       if (strictMarkdown) {
         throw new Error(`Unsupported markdown construct: ${token.type}`);
       }
-      chunks.push(...renderWrappedPlainText(token.content, charsPerLine, selectedCodePage.name));
+      chunks.push(...renderWrappedPlainText(token.content, charsPerLine, selectedCodePage.name, replacements));
       continue;
     }
   }
 
   chunks.push(feed(4), cut(true));
-  return concat(chunks);
+  return {
+    bytes: concat(chunks),
+    replacements
+  };
+}
+
+function markdownToEscpos(markdown, options = {}) {
+  return markdownToEscposDetailed(markdown, options).bytes;
 }
 
 module.exports = {
   markdownToEscpos,
+  markdownToEscposDetailed,
   wrapText,
   renderHeading,
   renderParagraph,

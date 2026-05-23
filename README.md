@@ -89,6 +89,21 @@ Printer selection order:
 3. First printer matching `epson|tm-t88v|receipt`
 4. First detected printer
 
+## Text Conversion Behavior
+
+Supported code pages are `cp437`, `cp850`, `cp858`, and `cp1252`.
+
+Text conversion only normalizes these exceptions before encoding:
+
+- smart quotes to ASCII quotes
+- Unicode dashes to `-`
+- non-breaking spaces to regular spaces
+
+Other unsupported characters become `?`.
+
+- The CLI warns when fallback replacement occurs.
+- Module conversion stays silent by default.
+
 ## Module API
 
 Package entry point: `require("@bestimmaa/posprint")`

@@ -4,7 +4,8 @@
 const os = require("os");
 const { readFile } = require("fs/promises");
 const { getArgValue, hasFlag } = require("./cli-common");
-const { markdownToEscpos, listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
+const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
+const { markdownToEscposDetailed } = require("./markdown-to-escpos");
 const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
 const { normalizePrinterUri, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
 const pkg = require("../package.json");
@@ -149,6 +150,24 @@ function parseLayoutOptions(argv) {
   return layoutOptions;
 }
 
+function warnOnFallbackReplacements(replacements, codePage, warn) {
+  const fallbackInputs = [];
+
+  for (const replacement of replacements || []) {
+    if (replacement && replacement.kind === "fallback" && replacement.input) {
+      if (!fallbackInputs.includes(replacement.input)) {
+        fallbackInputs.push(replacement.input);
+      }
+    }
+  }
+
+  if (!fallbackInputs.length) {
+    return;
+  }
+
+  warn(`Code page ${codePage} replaced unsupported characters with '?': ${fallbackInputs.join(", ")}`);
+}
+
 async function resolveMarkdownInput({ argv }) {
   const markdownFile = getArgValue(argv, "--markdown-file");
   const markdownInline = getArgValue(argv, "--markdown");
@@ -201,7 +220,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const listPrintersFn = deps.listPrinters || listPrinters;
   const printRawFn = deps.printRaw || printRaw;
   const printRawToPrinterUriFn = deps.printRawToPrinterUri || printRawToPrinterUri;
-  const markdownToEscposFn = deps.markdownToEscpos || markdownToEscpos;
+  const markdownToEscposDetailedFn = deps.markdownToEscposDetailed || markdownToEscposDetailed;
   const printerUriRaw = getArgValue(argv, "--printer-uri");
   const warn = deps.warn || ((message) => console.warn(message));
   const printerUri = validatePrinterUri(printerUriRaw, { warn });
@@ -209,12 +228,16 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const codePage = parseCodePageOption(argv);
 
   const { markdown } = await resolveMarkdownInput({ argv });
-  const payload = Buffer.from(markdownToEscposFn(markdown, {
+  const conversionOptions = {
     charsPerLine,
     strictMarkdown,
     codePage,
     ...layoutOptions
-  }));
+  };
+  const detailedResult = markdownToEscposDetailedFn(markdown, conversionOptions);
+  const payload = Buffer.from(detailedResult.bytes);
+
+  warnOnFallbackReplacements(detailedResult.replacements, codePage, warn);
 
   if (dryRun) {
     return { printerName: null, payloadLength: payload.length, dryRun: true };

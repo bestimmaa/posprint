@@ -141,7 +141,7 @@ test("main validates --chars-per-line before platform check", async () => {
   );
 });
 
-test("main forwards layout and code-page options to markdownToEscpos", async () => {
+test("main forwards layout and code-page options to markdownToEscposDetailed", async () => {
   const calls = [];
 
   const result = await main(
@@ -156,9 +156,12 @@ test("main forwards layout and code-page options to markdownToEscpos", async () 
       "--code-page=cp858"
     ],
     {
-      markdownToEscpos: (_markdown, options) => {
+      markdownToEscposDetailed: (_markdown, options) => {
         calls.push(options);
-        return Uint8Array.from([0x1b, 0x40]);
+        return {
+          bytes: Uint8Array.from([0x1b, 0x40]),
+          replacements: []
+        };
       }
     }
   );
@@ -171,6 +174,101 @@ test("main forwards layout and code-page options to markdownToEscpos", async () 
   assert.equal(calls[0].leftMarginMm, 2);
   assert.equal(calls[0].printAreaWidthMm, 42);
   assert.equal(calls[0].codePage, "cp858");
+});
+
+test("main warns in dry-run when detailed conversion reports fallback replacements", async () => {
+  const warnings = [];
+
+  const result = await main(
+    ["--dry-run", "--markdown=Euro: EUR | snowman: ?", "--code-page=cp437"],
+    {
+      markdownToEscposDetailed: (_markdown, options) => {
+        assert.equal(options.codePage, "cp437");
+
+        return {
+          bytes: Uint8Array.from([0x1b, 0x40]),
+          replacements: [
+            { input: "€", output: "?", kind: "fallback" },
+            { input: "☃", output: "?", kind: "fallback" }
+          ]
+        };
+      },
+      warn: (message) => warnings.push(message)
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /cp437/);
+  assert.match(warnings[0], /€/);
+  assert.match(warnings[0], /☃/);
+  assert.match(warnings[0], /with '\?'/i);
+});
+
+test("main does not warn when detailed conversion reports only approved normalizations", async () => {
+  const warnings = [];
+
+  const result = await main(
+    ["--dry-run", "--markdown=Smart quotes", "--code-page=cp437"],
+    {
+      markdownToEscposDetailed: () => ({
+        bytes: Uint8Array.from([0x1b, 0x40]),
+        replacements: [
+          { input: "’", output: "'", kind: "normalization" },
+          { input: "“", output: '"', kind: "normalization" }
+        ]
+      }),
+      warn: (message) => warnings.push(message)
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(warnings, []);
+});
+
+test("main does not warn when detailed conversion has no fallback replacements", async () => {
+  const warnings = [];
+
+  const result = await main(
+    ["--dry-run", "--markdown=Plain text", "--code-page=cp858"],
+    {
+      markdownToEscposDetailed: () => ({
+        bytes: Uint8Array.from([0x1b, 0x40]),
+        replacements: [
+          { input: "-", output: "-", kind: "identity" },
+          { input: "…", output: "...", kind: "normalization" },
+          { input: "x", output: "!", kind: "manual" }
+        ]
+      }),
+      warn: (message) => warnings.push(message)
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(warnings, []);
+});
+
+test("main warns for fallback replacements even if metadata output is not question mark", async () => {
+  const warnings = [];
+
+  const result = await main(
+    ["--dry-run", "--markdown=Unsupported", "--code-page=cp437"],
+    {
+      markdownToEscposDetailed: () => ({
+        bytes: Uint8Array.from([0x1b, 0x40]),
+        replacements: [
+          { input: "λ", output: "[?]", kind: "fallback" }
+        ]
+      }),
+      warn: (message) => warnings.push(message)
+    }
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /cp437/);
+  assert.match(warnings[0], /λ/);
+  assert.match(warnings[0], /with '\?'/i);
 });
 
 test("main rejects unsupported --code-page", async () => {
@@ -324,4 +422,3 @@ test("main prints via printer-uri on win32 and skips listPrinters", async () => 
   assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(typeof uriCall.bytes, "number");
 });
-
