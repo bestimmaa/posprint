@@ -332,6 +332,17 @@ test("github actions workflow exists for public CI", () => {
   assert.match(workflow, /run:\s+npm pack/);
 });
 
+test("github actions workflow uses Node 24-compatible action majors", () => {
+  const workflowPath = path.resolve(__dirname, "..", ".github", "workflows", "ci.yml");
+  const workflow = readFileSync(workflowPath, "utf8");
+
+  assert.match(workflow, /uses:\s+actions\/checkout@v6/);
+  assert.match(workflow, /uses:\s+actions\/setup-node@v6/);
+  assert.match(workflow, /node-version:\s+20/);
+  assert.doesNotMatch(workflow, /uses:\s+actions\/checkout@v4/);
+  assert.doesNotMatch(workflow, /uses:\s+actions\/setup-node@v4/);
+});
+
 test("bitbucket pipeline pack step handles scoped tarball names safely", () => {
   const workflowPath = path.resolve(__dirname, "..", "bitbucket-pipelines.yml");
   assert.equal(existsSync(workflowPath), true);
