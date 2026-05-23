@@ -175,3 +175,19 @@ test("github actions workflow exists for public CI", () => {
   assert.match(workflow, /run:\s+npm test/);
   assert.match(workflow, /run:\s+npm pack/);
 });
+
+test("bitbucket pipeline pack step handles scoped tarball names safely", () => {
+  const workflowPath = path.resolve(__dirname, "..", "bitbucket-pipelines.yml");
+  assert.equal(existsSync(workflowPath), true);
+
+  const workflow = readFileSync(workflowPath, "utf8");
+
+  assert.match(workflow, /^image:\s*node:20\s*$/m);
+  assert.match(workflow, /^pipelines:\s*$/m);
+  assert.match(workflow, /^\s+default:\s*$/m);
+  assert.match(workflow, /^\s+- step:\s*$/m);
+  assert.match(workflow, /^\s+name:\s+Pack\s*$/m);
+  assert.match(workflow, /RAW_TARBALL=\$\(npm pack\)/);
+  assert.match(workflow, /mv "\$RAW_TARBALL" "\$FINAL_TARBALL"/);
+  assert.match(workflow, /ls -1 -- \*\.tgz/);
+});

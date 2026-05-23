@@ -24,6 +24,6 @@ pipelines:
           - RAW_TARBALL=$(npm pack)
           - FINAL_TARBALL="${SAFE_PKG_NAME}-${PKG_VERSION}-${SAFE_BRANCH}-${SHORT_SHA}.tgz"
           - mv "$RAW_TARBALL" "$FINAL_TARBALL"
-          - ls -1 *.tgz
+          - ls -1 -- *.tgz
         artifacts:
           - "*.tgz"
