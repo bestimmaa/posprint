@@ -27,10 +27,15 @@
     "spooler",
     "cli"
   ],
+  "author": "bestimmaa",
   "license": "MIT",
+  "homepage": "https://github.com/bestimmaa/posprint#readme",
+  "bugs": {
+    "url": "https://github.com/bestimmaa/posprint/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chris/posprint.git"
+    "url": "git+https://github.com/bestimmaa/posprint.git"
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
@@ -38,7 +43,7 @@
     "print:dry": "node src/print-cli.js --dry-run",
     "print:test": "node src/print-cli.js --markdown-file=tests/fixtures/fixture-markdown-showcase.md",
     "print:test:dry": "node src/print-cli.js --markdown-file=tests/fixtures/fixture-markdown-showcase.md --dry-run",
-    "release:commit-tag": "git add package.json package-lock.json CHANGELOG.md && VERSION=$(node -p \"require('./package.json').version\") && git commit -m \"chore(release): v${VERSION}\" && git tag \"v${VERSION}\"",
+    "release": "node scripts/release.js",
     "prepublishOnly": "npm test"
   },
   "dependencies": {

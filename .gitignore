@@ -1,6 +1,7 @@
 drivers_and_manuals/
 node_modules/
 *.log
+*.tgz
 tmp/
 .worktrees/
 docs/superpowers/

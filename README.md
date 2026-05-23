@@ -1,6 +1,8 @@
 # posprint
 
-`posprint` is a Node.js module + CLI for markdown-to-ESC/POS receipt printing to Epson TM-T88V, supporting Windows RAW spooler and Linux/macOS CUPS raw printing, with practical workflows for conversion-only and real print jobs.
+`posprint` is a Node.js module and CLI for turning markdown into ESC/POS receipt output for Epson TM-T88V style printers. It supports Windows RAW spooler printing and Linux/macOS CUPS workflows, with dry-run output for payload inspection before sending a real print job.
+
+GitHub: `https://github.com/bestimmaa/posprint`
 
 ## Contents
 
@@ -8,30 +10,35 @@
 - [Quick Start](#quick-start)
 - [CLI Usage](#cli-usage)
 - [Module Usage](#module-usage)
+- [Inline Markdown Styling](#inline-markdown-styling)
 - [Markdown Images](#markdown-images)
 - [Native QR Codes](#native-qr-codes)
 - [Layout Controls (Safe Subset)](#layout-controls-safe-subset)
 - [Code Pages and Text Encoding](#code-pages-and-text-encoding)
 - [Examples](#examples)
 - [Development](#development)
-- [Bitbucket Pipeline Artifact Build](#bitbucket-pipeline-artifact-build)
 - [Windows Requirements](#windows-requirements)
 - [Linux/macOS Requirements](#linuxmacos-requirements)
 - [License](#license)
 
 ## Install
 
-Install globally:
+Install as a project dependency:
+
+```bash
+npm install posprint
+```
+
+Install the CLI globally:
 
 ```bash
 npm i -g posprint
 ```
 
-For local development in this repository:
+Browse source, issues, and releases on GitHub:
 
-```bash
-npm install
-```
+- `https://github.com/bestimmaa/posprint`
+- `https://github.com/bestimmaa/posprint/issues`
 
 ## Quick Start
 
@@ -41,23 +48,59 @@ Show CLI help:
 posprint --help
 ```
 
-Dry run from inline markdown (build payload only; no printer discovery and no print job):
+Dry run from inline markdown without contacting a printer:
 
 ```bash
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant"
 ```
 
-Send a real print job to a specific printer queue (Windows, Linux, or macOS):
+Print directly to a local printer queue:
 
 ```bash
 posprint --markdown="# Hello\n\n- Espresso\n- Croissant" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
+## CLI Usage
+
+```text
+posprint [options]
+```
+
+Flags:
+
+- `--markdown-file=<path>`: Read receipt content from a markdown file.
+- `--markdown="..."`: Pass markdown inline as a single argument.
+- `--printer="Printer Name"`: Target an exact local printer queue.
+- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to an IPP/IPPS printer URI on Windows, Linux, or macOS. This takes precedence over `--printer`. `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://` or `ipps://` with a warning.
+- `--chars-per-line=<n>`: Set receipt wrapping width. Default: `42`.
+- `--code-page=<name>`: ESC/POS code page name. Default: `cp858`.
+- `--list-code-pages`: Print supported code pages as a table and as canonical names.
+- `--font=A|B|C`: Select ESC/POS font for the full receipt.
+- `--character-spacing-mm=<n>`: Character spacing in millimeters (`>= 0`).
+- `--line-spacing-mm=<n>`: Line spacing in millimeters (`> 0`).
+- `--left-margin-mm=<n>`: Left margin in millimeters (`>= 0`).
+- `--print-area-width-mm=<n>`: Print area width in millimeters (`> 0`).
+- `--strict-markdown`: Fail on unsupported HTML tokens and invalid QR shortcodes.
+- `--dry-run`: Build and inspect output without sending a print job.
+- `--help`: Show CLI usage.
+- `--version`: Show package version.
+
 ## Module Usage
+
+Package entry point: `require("posprint")`
+
+Exports:
+
+- `markdownToEscpos`
+- `listPrinters`
+- `printRaw`
+- `printRawToPrinterUri`
+- `printRawToWindowsPrinter`
+- `selectPrinterName`
 
 ### CommonJS
 
-Print flow (convert markdown, discover/select printer, submit RAW job):
+Convert markdown to ESC/POS bytes and print to a selected local queue:
 
 ```js
 const { markdownToEscpos, listPrinters, selectPrinterName, printRaw } = require("posprint");
@@ -81,7 +124,7 @@ printReceipt().catch((error) => {
 });
 ```
 
-Direct IPP/IPPS URI printing (Windows, linux, macOS):
+Print directly to an IPP/IPPS URI:
 
 ```js
 const { markdownToEscpos, printRawToPrinterUri } = require("posprint");
@@ -99,13 +142,12 @@ printToUri().catch((error) => {
 });
 ```
 
-Conversion only (build ESC/POS bytes without sending a print job):
+Conversion only:
 
 ```js
 const { markdownToEscpos } = require("posprint");
 
-const markdown = "# Dry Run\n\n- Tea\n- Muffin";
-const escpos = markdownToEscpos(markdown, {
+const escpos = markdownToEscpos("# Dry Run\n\n- Tea\n- Muffin", {
   charsPerLine: 42,
   codePage: "cp858",
   font: "B",
@@ -117,9 +159,9 @@ const escpos = markdownToEscpos(markdown, {
 console.log(`ESC/POS payload bytes: ${escpos.length}`);
 ```
 
-### ESM interop
+### ESM Interop
 
-Use default import and destructure named exports from the CommonJS module:
+`posprint` publishes CommonJS. In ESM, import the default export and destructure:
 
 ```js
 import posprint from "posprint";
@@ -130,38 +172,13 @@ const escpos = markdownToEscpos("# ESM Interop\n\n- Latte", { charsPerLine: 42 }
 console.log(`ESC/POS payload bytes: ${escpos.length}`);
 ```
 
-## CLI Usage
-
-```text
-posprint [options]
-```
-
-Flags:
-
-- `--markdown-file=<path>`: Read receipt content from a markdown file.
-- `--markdown="..."`: Pass markdown inline as a single argument.
-- `--printer="Printer Name"`: Target an exact local printer queue.
-- `--printer-uri="ipp://host:631/printers/queue"`: Print directly to an IPP/IPPS printer URI on Windows, Linux, or macOS (takes precedence over `--printer`). `http://.../printers/...` and `https://.../printers/...` inputs are auto-converted to `ipp://`/`ipps://` with a warning.
-- `--chars-per-line=<n>`: Set receipt wrapping width (default: `42`).
-- `--code-page=<name>`: ESC/POS code page name (default: `cp858`).
-- `--list-code-pages`: Print supported code pages as a table (`name` + ESC/POS id) and as canonical names for scripting.
-- `--font=A|B|C`: Select ESC/POS font for the full receipt.
-- `--character-spacing-mm=<n>`: Character spacing in millimeters (`>= 0`).
-- `--line-spacing-mm=<n>`: Line spacing in millimeters (`> 0`).
-- `--left-margin-mm=<n>`: Left margin in millimeters (`>= 0`).
-- `--print-area-width-mm=<n>`: Print area width in millimeters (`> 0`).
-- `--strict-markdown`: Fail on unsupported markdown/HTML constructs.
-- `--dry-run`: Build and inspect output without sending a print job.
-- `--help`: Show CLI usage.
-- `--version`: Show package version.
-
 ## Inline Markdown Styling
 
-`posprint` supports a practical subset of inline markdown styling for receipt readability:
+`posprint` supports a practical subset of inline markdown styling:
 
-- `**strong**` → ESC/POS bold on/off
-- `*emphasis*` → ESC/POS italic on/off
-- `~~strikethrough~~` → degrades to plain readable text (markers removed)
+- `**strong**` -> ESC/POS bold on and off
+- `*emphasis*` -> ESC/POS italic on and off
+- `~~strikethrough~~` -> readable plain text with markers removed
 
 ## Markdown Images
 
@@ -172,21 +189,21 @@ Flags:
 ```
 
 - Supported formats: `.png`, `.jpg`, `.jpeg`
-- Relative paths are resolved from the current working directory.
-- Images are converted automatically to monochrome ESC/POS raster output.
-- Images wider than paper are scaled down to fit.
-- Images smaller than paper keep natural size and are centered.
-- Missing/invalid/unsupported images fail the command with an error.
+- Relative paths resolve from the current working directory
+- Images are converted to monochrome ESC/POS raster output
+- Wide images are scaled down to fit paper width
+- Smaller images keep natural size and are centered
+- Missing, invalid, or unsupported images fail the command
 
 ## Native QR Codes
 
-`posprint` supports native ESC/POS QR codes via inline shortcode syntax:
+Use inline shortcode syntax:
 
 ```md
 {{qr:https://example.com|size=6|ec=M}}
 ```
 
-Example inside receipt markdown (text payload):
+Example:
 
 ```md
 ## Loyalty
@@ -196,70 +213,64 @@ Scan to join rewards:
 
 Options:
 
-- `size` (`1`-`16`, default `6`)
-- `ec` (`L`, `M`, `Q`, `H`, default `M`)
+- `size`: `1` to `16`, default `6`
+- `ec`: `L`, `M`, `Q`, or `H`, default `M`
 
 Validation behavior:
 
-- `--strict-markdown`: invalid QR shortcodes fail the command.
-- Default best-effort mode: invalid QR shortcodes print a warning and are rendered literally.
+- `--strict-markdown`: invalid QR shortcodes fail the command
+- Default mode: invalid QR shortcodes print a warning and are rendered literally
 
 ## Layout Controls (Safe Subset)
 
-Global layout options are supported for each generated receipt (module + CLI):
+Global layout options are available in both the module API and the CLI:
 
-- `font` / `--font=A|B|C`
-- `characterSpacingMm` / `--character-spacing-mm=<n>`
-- `lineSpacingMm` / `--line-spacing-mm=<n>`
-- `leftMarginMm` / `--left-margin-mm=<n>`
-- `printAreaWidthMm` / `--print-area-width-mm=<n>`
+- `font` or `--font=A|B|C`
+- `characterSpacingMm` or `--character-spacing-mm=<n>`
+- `lineSpacingMm` or `--line-spacing-mm=<n>`
+- `leftMarginMm` or `--left-margin-mm=<n>`
+- `printAreaWidthMm` or `--print-area-width-mm=<n>`
 
-Values are in millimeters and converted internally to ESC/POS units for TM-T88V workflows.
+Values are given in millimeters and converted to ESC/POS units for TM-T88V workflows.
 
 Currently unsupported: tab stops, absolute positioning, and relative positioning.
 
 ## Code Pages and Text Encoding
 
-`posprint` transcodes Unicode markdown text into the selected ESC/POS code page bytes before sending print payloads.
-This is required for receipt printers because selecting a code page command (`ESC t n`) does not make UTF-8 payload bytes print correctly on its own.
+`posprint` transcodes Unicode markdown text into the selected ESC/POS code page before printing.
 
 Default code page:
 
-- `cp858` (ESC/POS `ESC t 19`)
+- `cp858` (`ESC t 19`)
 
-Repository validation convention:
-
-- For fixture-level validation checks in this repository, prefer `cp850` so expected Western bytes are explicit and repeatable across tests/fixtures.
-- Runtime default remains `cp858` unless you pass `--code-page` (CLI) or `codePage` (module).
-
-CLI:
+CLI example:
 
 - `--code-page=cp858`
 
-Module:
+Module example:
 
 - `markdownToEscpos(markdown, { codePage: "cp858" })`
 
 Fallback behavior for unencodable characters:
 
-1. Try direct encode in active code page.
-2. If not encodable, apply ASCII-safe normalization fallback (for example smart quotes `“ ” ‘ ’` → ASCII quotes).
-3. If still not encodable, emit `?`.
+1. Try direct encode in the active code page.
+2. Apply ASCII-safe normalization when possible.
+3. Emit `?` if the character still cannot be encoded.
 
-Show supported code pages from CLI:
+Show supported code pages:
 
 ```bash
 posprint --list-code-pages
 ```
 
-### Supported code pages
+### Supported Code Pages
 
 | Name   | CLI value | ESC/POS ID (`ESC t n`) | Notes |
 |--------|-----------|------------------------|-------|
 | CP437  | `cp437`   | `0`                    | Legacy US DOS table |
 | CP850  | `cp850`   | `2`                    | Western Europe DOS table |
 | CP858  | `cp858`   | `19`                   | Default; CP850 variant with `€` |
-| CP1252 | `cp1252`  | `16`                   | Windows Western punctuation/quotes |
+| CP1252 | `cp1252`  | `16`                   | Windows Western punctuation and quotes |
 
 Printer selection order:
 
@@ -276,11 +287,10 @@ Dry run with inline markdown:
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant" --chars-per-line=42
 ```
 
-Dry run with global layout controls:
+Dry run from a local markdown file:
 
 ```bash
-posprint --dry-run --markdown-file="tests/fixtures/fixture-markdown-showcase.md" \
-  --font=B --character-spacing-mm=1 --line-spacing-mm=3 --left-margin-mm=2 --print-area-width-mm=42
+posprint --dry-run --markdown-file="./receipt.md"
 ```
 
 PowerShell multiline markdown:
@@ -289,42 +299,34 @@ PowerShell multiline markdown:
 posprint --dry-run --markdown "# Shift Open`n`n- Till: 3`n- Cashier: Sam"
 ```
 
-Print from file to the USB receipt queue:
+Print from a file to a local queue:
 
 ```bash
-posprint --markdown-file="tests/fixtures/fixture-markdown-basic.md" --printer="EPSON TM-T88V Receipt (USB)"
+posprint --markdown-file="./receipt.md" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
-Print directly to a remote CUPS queue via URI:
+Print directly to a remote IPP or IPPS printer URI:
 
 ```bash
-posprint --markdown-file="tests/fixtures/fixture-markdown-showcase.md" \
-  --printer-uri="ipp://taiga.local:631/printers/TM-T88V"
+posprint --markdown-file="./receipt.md" --printer-uri="ipp://taiga.local:631/printers/TM-T88V"
 ```
-
-Note: `http://...` URLs are CUPS web UI endpoints. For printing, use `ipp://...` or `ipps://...`.
 
 Validate markdown strictly before printing:
 
 ```bash
-posprint --dry-run --markdown-file="tests/fixtures/fixture-markdown-unsupported-html.md" --strict-markdown
+posprint --dry-run --markdown-file="./receipt.md" --strict-markdown
 ```
 
-Use environment override for printer selection:
+Use an environment override for printer selection:
 
 ```powershell
 $env:ESC_POS_PRINTER="EPSON TM-T88V Receipt (USB)"
-posprint --markdown-file="tests/fixtures/fixture-markdown-showcase.md"
+posprint --markdown-file="./receipt.md"
 ```
-
-Fixture naming convention (tests/fixtures):
-
-- Markdown fixtures: `fixture-markdown-<purpose>.md`
-- Image fixtures: `fixture-image-<purpose>.<ext>`
 
 ## Development
 
-Install dependencies:
+Install repository dependencies:
 
 ```bash
 npm install
@@ -336,38 +338,51 @@ Run tests:
 npm test
 ```
 
-Project scripts for ESC/POS and spooler verification:
+Repository helper scripts:
 
-- `npm run print:test:dry` runs `src/print-cli.js` with `tests/fixtures/fixture-markdown-showcase.md` and `--dry-run`.
-- `npm run print:test` runs `src/print-cli.js` with `tests/fixtures/fixture-markdown-showcase.md` to submit a RAW print job.
+- `npm run print:test:dry` runs a repository-maintainer dry run against an in-repo fixture
+- `npm run print:test` runs a repository-maintainer print submission against an in-repo fixture
 
-Release helper script:
+Public release workflow:
 
-- `npm run release:commit-tag` stages `package.json`, `package-lock.json`, and `CHANGELOG.md`, creates commit `chore(release): vMAJOR.MINOR.PATCH`, and creates matching tag `vMAJOR.MINOR.PATCH` on that commit.
+```bash
+git branch -M main
+git remote -v
+git remote add github https://github.com/bestimmaa/posprint.git
+git remote set-url github https://github.com/bestimmaa/posprint.git
+npm run release -- patch
+git push origin main:main --follow-tags
+git push github main:main --follow-tags
+npm publish --access public
+```
 
-## Bitbucket Pipeline Artifact Build
+Before the first public release from an older clone, do a one-time migration/setup pass:
 
-- Pipeline runs on all branch pushes.
-- Test step runs `npm test`.
-- Pack step runs `npm pack`.
-- Artifact tarball name format: `<packageName>-<version>-<sanitizedBranch>-<shortSha>.tgz`.
-- Download generated tarballs from Bitbucket Artifacts for each pipeline run.
+- Rename the local branch with `git branch -M main` if the release branch is still named something else.
+- Confirm your remotes with `git remote -v`.
+- If `github` does not exist yet, add it with `git remote add github https://github.com/bestimmaa/posprint.git`.
+- If `github` already exists but points somewhere else, fix it with `git remote set-url github https://github.com/bestimmaa/posprint.git`.
+- After the first `git push github main:main --follow-tags`, update the GitHub repository default branch to `main`.
+
+Before running `npm run release -- patch`, update `CHANGELOG.md` with the next release heading, for example `## [next-version]` such as `## [0.2.3]`. The release helper enforces that exact upcoming version heading before it will create the release commit and tag.
+
+After the one-time setup, the normal release helper requires `main`, verifies a clean worktree, requires that next-version `CHANGELOG.md` entry, runs `npm test`, creates the release commit and tag, runs `npm pack`, then prints the push guidance you should complete before `npm publish --access public`. In this repository, Bitbucket stays on `origin` and the public GitHub remote is expected to be named `github`.
 
 ## Windows Requirements
 
-- Windows machine with Node.js 20+.
-- Epson TM-T88V installed as a Windows printer.
-- Printer queue available to the current user session.
-- RAW printing enabled through the Windows spooler path.
-- For `--printer-uri`, an IPP/IPPS-reachable printer endpoint (for example `ipp://host:631/printers/queue`).
+- Node.js 20+
+- Epson TM-T88V installed as a Windows printer for local queue printing
+- Printer queue available to the current user session
+- RAW printing enabled through the Windows spooler path
+- For `--printer-uri`, an IPP or IPPS reachable printer endpoint such as `ipp://host:631/printers/queue`
 
 ## Linux/macOS Requirements
 
-- Linux or macOS machine with Node.js 20+.
-- CUPS client tooling installed (`lpstat`, `lp`, and/or `lpr`).
-- Local queue printing uses discovered queues from the current user session.
-- URI printing uses IPP/IPPS endpoints (for example: `ipp://host:631/printers/queue`).
-- ESC/POS is sent in raw mode.
+- Node.js 20+
+- CUPS client tooling installed, such as `lpstat`, `lp`, or `lpr`
+- Local queue printing available to the current user session
+- URI printing through an IPP or IPPS endpoint such as `ipp://host:631/printers/queue`
+- ESC/POS data sent in raw mode
 
 ## License
 
