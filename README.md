@@ -26,13 +26,13 @@ GitHub: `https://github.com/bestimmaa/posprint`
 Install as a project dependency:
 
 ```bash
-npm install posprint
+npm install @bestimmaa/posprint
 ```
 
 Install the CLI globally:
 
 ```bash
-npm i -g posprint
+npm i -g @bestimmaa/posprint
 ```
 
 Browse source, issues, and releases on GitHub:
@@ -87,7 +87,7 @@ Flags:
 
 ## Module Usage
 
-Package entry point: `require("posprint")`
+Package entry point: `require("@bestimmaa/posprint")`
 
 Exports:
 
@@ -103,7 +103,7 @@ Exports:
 Convert markdown to ESC/POS bytes and print to a selected local queue:
 
 ```js
-const { markdownToEscpos, listPrinters, selectPrinterName, printRaw } = require("posprint");
+const { markdownToEscpos, listPrinters, selectPrinterName, printRaw } = require("@bestimmaa/posprint");
 
 async function printReceipt() {
   const markdown = "# Cafe Receipt\n\n- Americano\n- Croissant";
@@ -127,7 +127,7 @@ printReceipt().catch((error) => {
 Print directly to an IPP/IPPS URI:
 
 ```js
-const { markdownToEscpos, printRawToPrinterUri } = require("posprint");
+const { markdownToEscpos, printRawToPrinterUri } = require("@bestimmaa/posprint");
 
 async function printToUri() {
   const markdown = "# Hello\n\n- Espresso";
@@ -145,7 +145,7 @@ printToUri().catch((error) => {
 Conversion only:
 
 ```js
-const { markdownToEscpos } = require("posprint");
+const { markdownToEscpos } = require("@bestimmaa/posprint");
 
 const escpos = markdownToEscpos("# Dry Run\n\n- Tea\n- Muffin", {
   charsPerLine: 42,
@@ -164,7 +164,7 @@ console.log(`ESC/POS payload bytes: ${escpos.length}`);
 `posprint` publishes CommonJS. In ESM, import the default export and destructure:
 
 ```js
-import posprint from "posprint";
+import posprint from "@bestimmaa/posprint";
 
 const { markdownToEscpos } = posprint;
 const escpos = markdownToEscpos("# ESM Interop\n\n- Latte", { charsPerLine: 42 });

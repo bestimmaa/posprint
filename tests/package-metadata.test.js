@@ -30,9 +30,12 @@ function getWorkflowJobsBlock(workflow) {
 
 test("package metadata points to public GitHub repo", () => {
   assert.equal(pkg.private, false);
-  assert.equal(pkg.name, "posprint");
+  assert.equal(pkg.name, "@bestimmaa/posprint");
   assert.equal(pkg.author, "bestimmaa");
   assert.equal(pkg.license, "MIT");
+  assert.equal(typeof pkg.bin, "object");
+  assert.notEqual(pkg.bin, null);
+  assert.equal(pkg.bin.posprint, "src/print-cli.js");
   assert.equal(typeof pkg.repository, "object");
   assert.notEqual(pkg.repository, null);
   assert.equal(pkg.repository.type, "git");
@@ -106,8 +109,11 @@ test("release script file exists and validates bump types", () => {
 });
 
 test("readme documents npm install for module consumers", () => {
-  assert.equal(readme.includes("npm install posprint"), true);
-  assert.equal(readme.includes("npm i -g posprint"), true);
+  assert.equal(readme.includes("npm install @bestimmaa/posprint"), true);
+  assert.equal(readme.includes("npm i -g @bestimmaa/posprint"), true);
+  assert.equal(readme.includes("require(\"@bestimmaa/posprint\")"), true);
+  assert.equal(readme.includes("import posprint from \"@bestimmaa/posprint\""), true);
+  assert.equal(readme.includes("posprint --help"), true);
 });
 
 test("readme stays GitHub-first and avoids public Bitbucket release docs", () => {
