@@ -1,142 +1,73 @@
 # Supported Printers
 
-`posprint` generates ESC/POS byte streams for receipt-style printers. This document explains which printer classes are the best fit, which setups are likely to work with caveats, and which printer paths are outside the package's intended support profile.
+`posprint` sends ESC/POS bytes to receipt printers. It is a good fit when your print path preserves raw bytes and the target printer understands the ESC/POS commands the package emits.
 
-## Overview
+## What This Package Expects
 
-`posprint` does not render pages as PDF, PostScript, or XPS. It builds printer-ready ESC/POS commands and sends them through one of these paths:
+`posprint` does not render PDF, PostScript, or XPS output.
 
-- Windows local queue printing through the RAW spooler
-- Linux/macOS local queue printing through CUPS raw submission
-- Direct IPP/IPPS URI printing for reachable printer endpoints
+It sends ESC/POS over these paths:
 
-In practice, a printer works well with `posprint` when both of these conditions hold:
+- Windows local queues through the RAW spooler
+- Linux and macOS local queues through CUPS raw submission
+- direct `ipp://` and `ipps://` printer URIs through the package IPP client
 
-1. The print path passes raw bytes through without rewriting them.
-2. The target printer understands the ESC/POS commands that `posprint` emits.
+That means printer support depends on two things:
 
-The package is currently documented around Epson TM-T88V style receipt printers, so that family is the strongest documented fit.
+1. The queue or endpoint must pass the bytes through unchanged.
+2. The printer must support the subset of ESC/POS commands you plan to use.
 
-## Compatibility Summary
-
-### Recommended
+## Supported Well
 
 - Epson TM-T88V
-- Epson TM-series receipt printers with well-documented ESC/POS support and raw queue printing
-- Printer queues and IPP endpoints that preserve raw ESC/POS bytes unchanged
 
-### Likely Compatible
+This package is documented and tested around Epson TM-T88V style printers. If you want the lowest-risk target, start there.
 
-- Closely related receipt printers with well-documented ESC/POS support and raw queue printing
-- Non-Epson receipt printers that explicitly document Epson ESC/POS emulation and work reliably with raw queue submission
+## Should Work, But Test
 
-### Test Carefully
+- nearby Epson TM receipt models with official ESC/POS documentation, including TM-T88IV, TM-T88VI, TM-T88VII, TM-T20, TM-T70, TM-T82, and TM-T83
+- Epson mobile and m-series receipt lines when they are documented in the TM ESC/POS reference, including TM-m30, TM-m50, TM-P20, and TM-P80 families
+- other Epson TM receipt printers covered by Epson's ESC/POS references
+- non-Epson receipt printers that explicitly document Epson ESC/POS support or ESC/POS emulation
+- Bixolon SRP receipt printers and Citizen CT-S receipt printers when the queue preserves raw jobs and the model supports the commands you use
 
-- Generic printers marketed only as "ESC/POS compatible"
-- Mobile, label, or specialty receipt printers where cutter, width, image, or QR behavior may differ
-- IPP/IPPS printer targets that accept jobs over the protocol but do not clearly document raw ESC/POS handling
+These printers are reasonable candidates, but this package does not treat them as interchangeable with Epson TM models.
 
-### Not Recommended
+## Usually Not A Fit
 
-- Office printers that expect page-description formats instead of ESC/POS
-- Print paths that rasterize, transform, or reinterpret jobs before they reach the printer
-- Printers whose vendors only document a different command language
+- office printers that expect PDF, PostScript, PCL, or other page-description formats
+- printer paths that rasterize, filter, or rewrite jobs before they reach the device
+- printers documented only for a different command language
 
-## Known Good Fit
+Star Micronics deserves a separate note here: Star printers are not one command-language family. Some models use StarPRNT, some support ESC/POS, and some can switch emulations, so model-specific emulation documentation matters.
 
-The strongest documented fit for `posprint` is the Epson TM-T88V.
+## Known Risk Areas
 
-That alignment appears throughout the repository:
+- **Code pages:** `posprint` supports `cp437`, `cp850`, `cp858`, and `cp1252`. Characters outside the selected code page fall back to `?`.
+- **Fonts:** the package emits ESC/POS fonts `A`, `B`, and `C`, but many printers support only a subset.
+- **Cutters:** cut commands are appropriate for receipt printers with autocutters. Some printers ignore them or cut differently.
+- **QR codes:** native QR commands are common on recent receipt printers, but not universal.
+- **Images:** raster image support varies more than plain text support.
+- **Width:** the default layout assumes a TM-T88V-style receipt width. Narrower paper or different printable widths may need `--chars-per-line` and layout changes.
 
-- `README.md` describes `posprint` as producing output for Epson TM-T88V style printers.
-- Example commands use TM-T88V queue names and TM-T88V IPP queue names.
-- Printer auto-selection heuristics look for names like `epson`, `tm-t88v`, and `receipt`.
+## Vendor Notes
 
-Other Epson TM receipt models are plausible adjacent fits when they support the same core ESC/POS features, especially standard text formatting, feed, cut, QR, and raster image commands. Even within Epson families, support still varies by exact model and firmware generation, so this document treats TM-T88V as the primary reference point rather than asserting broad certification across the entire product line.
+- **Epson TM family:** Epson publishes an ESC/POS command reference covering many TM printers, including TM-T20, TM-T70, TM-T82, TM-T83, TM-T88IV, TM-T88V, TM-T88VI, TM-T88VII, TM-m30, TM-m50, TM-P20, TM-P80, and TM-U220 lines. This is the strongest support evidence for `posprint`.
+- **Bixolon SRP family:** Bixolon publishes SRP receipt-printer downloads and command manuals. Treat SRP models as plausible candidates, not Epson-equivalent guarantees.
+- **Citizen CT-S family:** Citizen publishes CT-S receipt-printer product and integration material. Treat CT-S models as plausible receipt-printer targets that still need feature validation.
+- **Star receipt printers:** Star documents multiple printer emulations, including StarPRNT and ESC/POS, across different models. Do not assume drop-in compatibility from the brand alone; check the model's emulation support.
 
-## Other ESC/POS Printers
+## How To Validate A Printer
 
-`posprint` is not limited to Epson-branded hardware, but non-Epson compatibility depends on the printer's actual command support rather than on marketing language alone.
+1. Run a dry run first.
+2. Print a plain text receipt through the real queue or URI.
+3. Confirm feed and cut behavior.
+4. Check the code page you plan to use.
+5. Check QR output.
+6. Check raster image output.
+7. Re-check spacing and width on the actual paper roll.
 
-A non-Epson printer is a better candidate when it explicitly documents one or more of the following:
-
-- Epson ESC/POS support
-- ESC/POS emulation mode
-- Raw command printing through the installed queue or endpoint
-
-Compatibility should be treated as progressively less certain when documentation becomes less specific. A claim like "ESC/POS compatible" often means basic text, feed, and cut support, but not necessarily the same QR, image, charset, or font behavior used by Epson models.
-
-## Platform Requirements
-
-### Windows
-
-On Windows, `posprint` uses the installed local printer queue and sends bytes through the RAW spooler path. This works best when the Windows print path preserves ESC/POS bytes exactly as submitted.
-
-Practical implications:
-
-- Use a printer queue that supports raw pass-through.
-- Do not assume that a generic Windows printing path will translate a receipt job into the printer's native command language.
-- If a queue expects rendered pages instead of raw commands, the job may print garbage or fail.
-
-### Linux And macOS
-
-On Linux and macOS, `posprint` submits jobs through CUPS tooling such as `lp` or `lpr` with raw printing options. Compatibility depends on the queue configuration still forwarding the ESC/POS payload unchanged.
-
-Practical implications:
-
-- Prefer queues known to support raw submission.
-- Avoid filter chains that convert or wrap the job before it reaches the device.
-- Verify that the selected queue represents the actual receipt printer target rather than a transformed print workflow.
-
-### IPP/IPPS URIs
-
-`posprint` also supports direct `ipp://` and `ipps://` targets. Protocol reachability alone does not guarantee receipt-printer compatibility.
-
-A direct URI is a good candidate only when the endpoint accepts raw octet-stream jobs and routes them to a printer that understands the emitted ESC/POS commands.
-
-## Feature Caveats
-
-Even when a printer accepts raw ESC/POS jobs, feature support can still vary by model.
-
-### Text And Code Pages
-
-`posprint` supports `cp437`, `cp850`, `cp858`, and `cp1252`. Unsupported characters are replaced with `?` after a small normalization pass for common punctuation and spacing variants.
-
-Printers with different code-page coverage may still print, but extended characters can degrade unexpectedly.
-
-### Font Selection
-
-The package exposes ESC/POS fonts `A`, `B`, and `C`. Some printers only support a subset of those fonts, so font `C` should be treated as model-dependent.
-
-### Cut Support
-
-`posprint` uses ESC/POS cut commands suitable for receipt printers with an autocutter. Printers without an autocutter, or printers with different cutter behavior, may feed paper differently or ignore the command.
-
-### QR Support
-
-QR support is common on modern ESC/POS receipt printers, but not universal. Older or partial implementations may reject the command sequence or render codes inconsistently.
-
-### Raster Image Support
-
-Image printing is usually the first advanced feature to expose vendor differences. A printer may support text and cut successfully while still producing poor image output, truncated images, or no image at all.
-
-### Width And Layout Assumptions
-
-The default `charsPerLine` setting is tuned for a TM-T88V style receipt width. Narrower paper widths, different default fonts, or different printable areas may require explicit layout changes for acceptable output.
-
-## Validation Checklist
-
-When testing a target printer with `posprint`, validate in this order:
-
-1. Dry-run the receipt to confirm the payload is generated successfully.
-2. Print a plain text receipt through the intended queue or URI.
-3. Confirm basic feed and final cut behavior.
-4. Confirm non-ASCII characters in the intended code page.
-5. Confirm QR output.
-6. Confirm raster image output.
-7. Re-check layout with the actual paper width and chosen font.
-
-If text works but advanced features fail, the printer may still be partially usable with a narrower feature set.
+If plain text works but QR or images fail, the printer may still be usable with a smaller feature set.
 
 ## Sources
 
@@ -144,18 +75,25 @@ Repository references:
 
 - [`README.md`](./README.md)
 - [`src/print-bridge.js`](./src/print-bridge.js)
-- [`src/markdown-to-escpos.js`](./src/markdown-to-escpos.js)
-- [`src/escpos-builder.js`](./src/escpos-builder.js)
-- [`src/windows-raw-printer.js`](./src/windows-raw-printer.js)
-- [`src/linux-cups-printer.js`](./src/linux-cups-printer.js)
 - [`src/ipp-printer.js`](./src/ipp-printer.js)
-- [`src/cli-common.js`](./src/cli-common.js)
+- [`src/linux-cups-printer.js`](./src/linux-cups-printer.js)
+- [`src/windows-raw-printer.js`](./src/windows-raw-printer.js)
+- [`src/escpos-builder.js`](./src/escpos-builder.js)
 - [`src/text-transcoder.js`](./src/text-transcoder.js)
-- [`src/printer-uri.js`](./src/printer-uri.js)
+- [`src/cli-common.js`](./src/cli-common.js)
 
-External technical references, captured 2026-05-23:
+External technical references, captured 2026-05-24:
 
-- Epson, ESC/POS Command Reference for TM Printers: <https://download4.epson.biz/sec_pubs/pos/reference_en/escpos/index.html>
-- Microsoft Learn, `WritePrinter` function: <https://learn.microsoft.com/en-us/windows/win32/printdocs/writeprinter>
+- Epson ESC/POS Command Reference for TM Printers: <https://download4.epson.biz/sec_pubs/pos/reference_en/escpos/index.html>
+- Microsoft Learn, `WritePrinter`: <https://learn.microsoft.com/en-us/windows/win32/printdocs/writeprinter>
 - CUPS `lp` command reference: <https://www.cups.org/doc/man-lp.html>
 - CUPS command-line printing and options guide: <https://www.cups.org/doc/options.html>
+- Epson POS printer lineup: <https://epson.com/point-of-sale>
+
+Vendor note references:
+
+- Bixolon SRP-350plusIII downloads (captured 2026-05-24): <https://www.bixolon.com/download_view.php?idx=23>
+- Citizen CT-S601II product page (captured 2026-05-24): <https://www.citizen-systems.co.jp/en/printer/product/ct_s601_2/>
+- Citizen XML/Web app printer page (captured 2026-05-24): <https://www.citizen-systems.co.jp/en/printer/special/xml_web_app/>
+- StarIOExt API documentation (captured 2026-05-24): <https://star-m.jp/products/s_print/sdk/starprnt_sdk/manual/wind_csharp/en/api_starioext.html>
+- StarPRNT SDK getting started (captured 2026-05-24): <https://star-m.jp/products/s_print/sdk/starprnt_sdk/manual/wind_csharp/en/getting_start.html>
