@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The version history source of truth is git tags in the format `vMAJOR.MINOR.PATCH`.
 
+## [0.2.4] - 2026-06-14
+
+### Added
+
+- Added public module API and release workflow guides.
+- Added a supported printers reference for ESC/POS compatibility validation.
+- Added CLI warnings when code page conversion falls back to `?` for unsupported characters.
+
+### Changed
+
+- Published package metadata and documentation now use the scoped package name `@bestimmaa/posprint`.
+- Expanded `cp437`, `cp850`, `cp858`, and `cp1252` text conversion coverage.
+- Preserved supported degree-sign output instead of rewriting it to `deg`.
+- Streamlined README content for public install and usage workflows.
+
+### Fixed
+
+- Fixed direct IPP/IPPS printer URI jobs to declare CUPS raw document format.
+- Fixed CI and packaging workflow compatibility for current GitHub Actions and scoped npm tarballs.
+
 ## [0.2.3] - 2026-05-23
 ### Added
 - Added direct IPP/IPPS printer URI printing support on Windows.
