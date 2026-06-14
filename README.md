@@ -7,7 +7,9 @@
 
 - npm: [`@bestimmaa/posprint`](https://www.npmjs.com/package/@bestimmaa/posprint)
 - GitHub: [bestimmaa/posprint](https://github.com/bestimmaa/posprint)
-- Platforms: Windows RAW spooler, Linux CUPS, macOS CUPS
+- Platforms: Windows RAW spooler, Linux CUPS, macOS CUPS — Node.js 20+ required
+- Supported printers: [SUPPORTED_PRINTERS.md](./SUPPORTED_PRINTERS.md)
+- Printer setup (Epson TM-T88V on CUPS): [PRINTER_SETUP.md](./PRINTER_SETUP.md)
 
 ## What it does
 
@@ -142,26 +144,6 @@ Show supported code pages:
 ```bash
 posprint --list-code-pages
 ```
-
-## Platform Support
-
-Windows:
-
-- Node.js 20+
-- RAW printing through the Windows spooler
-- Local queue printing by installed printer name
-- Direct `--printer-uri` support for reachable IPP/IPPS endpoints
-
-Linux/macOS:
-
-- Node.js 20+
-- CUPS tooling such as `lpstat`, `lp`, or `lpr`
-- Local queue printing through the current user session
-- Direct URI printing for IPP/IPPS endpoints
-
-For a compatibility overview and support caveats, see [SUPPORTED_PRINTERS.md](./SUPPORTED_PRINTERS.md).
-
-For step-by-step instructions on adding an Epson TM-T88V to CUPS, see [PRINTER_SETUP.md](./PRINTER_SETUP.md).
 
 ## Development
 
