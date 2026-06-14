@@ -33,7 +33,7 @@ jobs:
 
       - name: Verify branch
         run: |
-          if [ "$GITHUB_REF_NAME" != "main" ]; then
+          if [ -n "${GITHUB_REF_NAME:-}" ] && [ "$GITHUB_REF_NAME" != "main" ]; then
             echo "::error::Release workflow can only be triggered from the main branch, not '$GITHUB_REF_NAME'."
             exit 1
           fi
