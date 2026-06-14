@@ -158,6 +158,8 @@ Linux/macOS:
 
 For a compatibility overview and support caveats, see [SUPPORTED_PRINTERS.md](./SUPPORTED_PRINTERS.md).
 
+For step-by-step instructions on adding an Epson TM-T88V to CUPS, see [PRINTER_SETUP.md](./PRINTER_SETUP.md).
+
 ## Development
 
 Install repository dependencies:
