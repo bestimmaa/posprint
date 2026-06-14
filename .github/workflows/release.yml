@@ -31,6 +31,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Release workflow can only be triggered from the main branch, not '$GITHUB_REF_NAME'."
+            exit 1
+          fi
+
       - name: Test & release (commit + tag only)
         run: node scripts/release.js ${{ inputs.release_type }}
 
@@ -42,6 +49,7 @@ jobs:
           tags: true
 
       - name: Publish to npm
+        if: success()
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
