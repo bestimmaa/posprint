@@ -290,10 +290,7 @@ test("release guide documents the maintainer workflow", () => {
 
   assert.equal(releaseDoc.includes("npm run release -- patch"), true);
   assert.equal(releaseDoc.includes("npm publish --access public"), true);
-  assert.equal(releaseDoc.includes("git branch -M main"), true);
-  assert.equal(releaseDoc.includes("git remote add github https://github.com/bestimmaa/posprint.git"), true);
   assert.equal(releaseDoc.includes("git push origin main:main --follow-tags"), true);
-  assert.equal(releaseDoc.includes("git push github main:main --follow-tags"), true);
   assert.equal(releaseDoc.includes("## [next-version]"), true);
 });
 

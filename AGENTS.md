@@ -46,6 +46,7 @@ Public package coordinates:
 - After changing module/CLI behavior, API, scripts, or workflow:
   - verify `README.md`
   - keep module and CLI docs aligned in the same change
+- Always run `npm test` before committing. CI failures should never make it to main.
 
 ## Quick Commands
 - Install: `npm install`
