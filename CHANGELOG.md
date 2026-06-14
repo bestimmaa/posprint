@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The version history source of truth is git tags in the format `vMAJOR.MINOR.PATCH`.
 
+## [0.2.5] - 2026-06-15
+
+### Added
+
+- Added Epson TM-T88V CUPS setup guide (`PRINTER_SETUP.md`) covering macOS, Linux, and Windows USB configurations.
+- Added CI build status and npm version badges to README.
+
+### Changed
+
+- Surfaced platform compatibility and printer setup links at the top of README for faster onboarding.
+- Release workflow now restricted to `main` branch only.
+
 ## [0.2.4] - 2026-06-14
 
 ### Added
