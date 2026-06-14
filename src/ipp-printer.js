@@ -22,7 +22,7 @@ async function printRawToPrinterUri(printerUri, data, { ippClient = ipp, timeout
     "operation-attributes-tag": {
       "requesting-user-name": "posprint",
       "job-name": "ESC_POS_RAW",
-      "document-format": "application/octet-stream"
+      "document-format": "application/vnd.cups-raw"
     },
     data
   };

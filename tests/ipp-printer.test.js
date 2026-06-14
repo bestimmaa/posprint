@@ -64,7 +64,7 @@ test("printRawToPrinterUri sends Print-Job with expected attributes", async () =
   assert.equal(call.operation, "Print-Job");
   assert.equal(call.uri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(call.message.data, payload);
-  assert.equal(call.message["operation-attributes-tag"]["document-format"], "application/octet-stream");
+  assert.equal(call.message["operation-attributes-tag"]["document-format"], "application/vnd.cups-raw");
   assert.equal(result.backend, "ipp");
   assert.equal(result.command, "ipp");
   assert.equal(result.printerUri, "ipp://taiga.local:631/printers/TM-T88V");
