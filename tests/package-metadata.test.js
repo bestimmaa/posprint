@@ -259,7 +259,7 @@ test("readme uses a landing-page structure for public users", () => {
   assert.equal(readme.includes("## CLI"), true);
   assert.equal(readme.includes("## Module API"), true);
   assert.equal(readme.includes("## Features"), true);
-  assert.equal(readme.includes("## Platform Support"), true);
+  assert.equal(readme.includes("## Platform Support"), false);
 
   assertHeadingOrder(normalizedReadme, [
     "What it does",
@@ -268,7 +268,6 @@ test("readme uses a landing-page structure for public users", () => {
     "CLI",
     "Module API",
     "Features",
-    "Platform Support",
     "Development",
     "License"
   ]);
