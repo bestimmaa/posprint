@@ -1,6 +1,6 @@
 {
   "name": "@bestimmaa/posprint",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": false,
   "description": "Markdown-to-ESC/POS receipt printing CLI + Node.js module (Windows RAW + CUPS)",
   "main": "src/index.js",
