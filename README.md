@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/bestimmaa/posprint/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bestimmaa/posprint/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@bestimmaa/posprint)](https://www.npmjs.com/package/@bestimmaa/posprint)
-[![npm downloads](https://img.shields.io/npm/dw/@bestimmaa/posprint)](https://www.npmjs.com/package/@bestimmaa/posprint)
 
 `posprint` turns markdown into ESC/POS receipt output for Epson TM-T88V style printers.
 
