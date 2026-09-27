@@ -27,6 +27,15 @@ Other unsupported characters become `?`.
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
 
+## Table Rendering
+
+GFM tables print as monospace columns fitted to `charsPerLine`:
+
+- bold header row, then a dash separator
+- column alignment follows the separator row (`:---`, `:---:`, `---:`)
+- when the table is too wide, the widest columns shrink and cell text wraps inside its column; if the columns cannot fit at all, each row prints as wrapped `a | b | c` text
+- inline formatting inside cells prints as plain text
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:
@@ -55,12 +64,7 @@ printReceipt().catch((error) => {
 
 ## CommonJS Printer URI
 
-`printRawToPrinterUri(printerUri, data)` accepts:
-
-- `ipp://host:port/printers/queue` or `ipps://...`, submitted as an IPP `Print-Job` with raw document format
-- `tcp://host[:port]`, where the bytes are written straight to the printer socket (JetDirect/AppSocket). The port defaults to `9100`. A path, query, or credentials are rejected. The call resolves after the payload is flushed and the connection closes. It rejects with `TCP connection failed for host:port: ...` on connection errors, or `TCP print timed out after 10000ms for host:port` when the connection or write makes no progress for 10 seconds.
-
-Both schemes work on Windows, Linux, and macOS. Invalid URIs throw an `Error` whose `code` is `INVALID_URI`, `UNSUPPORTED_SCHEME`, `UNSUPPORTED_PATH`, or `INVALID_PORT`.
+`printRawToPrinterUri(printerUri, data)` accepts `ipp://host:port/printers/queue` / `ipps://...` (IPP `Print-Job`) or `tcp://host[:port]` (raw bytes over a socket, port defaults to `9100`). A `tcp://` job resolves once the payload is flushed and the connection closes, and rejects on connection errors or after 10 seconds without progress.
 
 Print directly to an IPP/IPPS URI:
 
@@ -88,8 +92,7 @@ const { markdownToEscpos, printRawToPrinterUri } = require("@bestimmaa/posprint"
 async function printToNetworkPrinter() {
   const escpos = markdownToEscpos("# Hello\n\n- Espresso", { charsPerLine: 42 });
 
-  // Same as tcp://192.168.1.50:9100
-  await printRawToPrinterUri("tcp://192.168.1.50", Buffer.from(escpos));
+  await printRawToPrinterUri("tcp://192.168.1.50:9100", Buffer.from(escpos));
 }
 
 printToNetworkPrinter().catch((error) => {

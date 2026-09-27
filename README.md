@@ -55,6 +55,13 @@ Print to a local queue:
 posprint --markdown="# Hello\n\n- Espresso\n- Croissant" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
+Pipe markdown via stdin (read when neither `--markdown-file` nor `--markdown` is given):
+
+```bash
+cat receipt.md | posprint --printer="EPSON TM-T88V Receipt (USB)"
+./generate-receipt | posprint --dry-run
+```
+
 Print to a printer URI:
 
 ```bash
@@ -82,7 +89,7 @@ posprint [options]
 
 Common options:
 
-- `--markdown-file=<path>` read receipt content from a markdown file
+- `--markdown-file=<path>` read receipt content from a markdown file; `--markdown-file=-` reads from stdin
 - `--markdown="..."` pass markdown inline as a single argument
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
@@ -103,7 +110,7 @@ Common options:
 
 `http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning.
 
-`tcp://` URIs take only a host and optional port (no path) and work on Windows, Linux, and macOS. Most network ESC/POS printers, including the TM-T88V with an Ethernet interface, accept raw jobs on port `9100`. The connection times out after 10 seconds without progress, and the error names the `host:port`.
+`tcp://host[:port]` URIs take no path and work on every platform. The job fails if the connection or write makes no progress for 10 seconds.
 
 `--status` and `--check-status` send the ESC/POS real-time status queries `DLE EOT 1`–`4` over the same raw TCP connection and need a `tcp://` printer URI. Local queues (`--printer`), IPP, CUPS, and the Windows spooler don't give bidirectional raw access, so they are rejected with `Printer status is only supported for tcp:// printer URIs`. Example reports:
 
@@ -167,6 +174,7 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 ## Features
 
 - Inline markdown styling with bold, emphasis, and readable strikethrough handling
+- GFM tables rendered as aligned monospace columns fitted to `charsPerLine` (see [Module API guide](https://github.com/bestimmaa/posprint/blob/main/docs/module-api.md#table-rendering))
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
 - Layout controls for font, character spacing, line spacing, left margin, and print area width

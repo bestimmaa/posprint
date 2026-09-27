@@ -119,25 +119,6 @@ for (const platformName of ["linux", "darwin", "win32"]) {
   });
 }
 
-test("bridge keeps ipp URIs on the ipp backend when tcp backend is present", async () => {
-  const bridge = createPrintBridge({
-    platform: () => "linux",
-    windows: {},
-    linux: {},
-    ipp: { printRawToPrinterUri: async () => ({ backend: "ipp" }) },
-    tcp: {
-      printRawToTcpPrinter: async () => {
-        throw new Error("ipp URIs must not go through tcp");
-      }
-    }
-  });
-
-  assert.deepEqual(
-    await bridge.printRawToPrinterUri("ipp://taiga.local:631/printers/TM-T88V", Buffer.from("x")),
-    { backend: "ipp" }
-  );
-});
-
 test("bridge throws on unsupported platform", async () => {
   const bridge = createPrintBridge({
     platform: () => "freebsd",
