@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
+const { Readable } = require("node:stream");
 const { getArgValue, hasFlag, selectPrinterName } = require("../src/cli-common");
 const { resolveMarkdownInput, main, formatHelp, validatePlatform, validatePrinterUri } = require("../src/print-cli");
 
@@ -36,11 +37,82 @@ test("resolveMarkdownInput prefers markdown-file over markdown string", async ()
   assert.equal(input.source, "file");
 });
 
-test("resolveMarkdownInput throws when no markdown input provided", async () => {
+function fakeStdin(chunks, { isTTY = false } = {}) {
+  const stream = Readable.from(chunks.map((chunk) => Buffer.from(chunk)));
+  stream.isTTY = isTTY;
+  return stream;
+}
+
+test("resolveMarkdownInput throws when no markdown input provided and stdin is a TTY", async () => {
   await assert.rejects(
-    () => resolveMarkdownInput({ argv: [] }),
-    /Provide --markdown-file or --markdown/
+    () => resolveMarkdownInput({ argv: [], stdin: { isTTY: true } }),
+    /Missing markdown input/
   );
+});
+
+test("resolveMarkdownInput reads stdin for --markdown-file=-", async () => {
+  const input = await resolveMarkdownInput({
+    argv: ["--markdown-file=-"],
+    stdin: fakeStdin(["# Hi\n", "\n- Tea"], { isTTY: true })
+  });
+  assert.deepEqual(input, { source: "stdin", markdown: "# Hi\n\n- Tea", markdownFile: null });
+});
+
+test("resolveMarkdownInput reads stdin for space-separated --markdown-file -", async () => {
+  const input = await resolveMarkdownInput({
+    argv: ["--markdown-file", "-", "--dry-run"],
+    stdin: fakeStdin(["hello"])
+  });
+  assert.equal(input.source, "stdin");
+  assert.equal(input.markdown, "hello");
+});
+
+test("resolveMarkdownInput reads implicit piped stdin when no input flag given", async () => {
+  const input = await resolveMarkdownInput({ argv: ["--dry-run"], stdin: fakeStdin(["# Piped"]) });
+  assert.equal(input.source, "stdin");
+  assert.equal(input.markdown, "# Piped");
+});
+
+test("resolveMarkdownInput decodes UTF-8 split across chunks and strips a leading BOM", async () => {
+  const bytes = Buffer.from("\uFEFF# Caf\u00e9 \u20ac", "utf8");
+  const input = await resolveMarkdownInput({
+    argv: [],
+    stdin: fakeStdin([bytes.subarray(0, 8), bytes.subarray(8)])
+  });
+  assert.equal(input.markdown, "# Caf\u00e9 \u20ac");
+});
+
+test("resolveMarkdownInput rejects empty stdin", async () => {
+  await assert.rejects(() => resolveMarkdownInput({ argv: [], stdin: fakeStdin([]) }), /Empty markdown input on stdin/);
+  await assert.rejects(
+    () => resolveMarkdownInput({ argv: ["--markdown-file=-"], stdin: fakeStdin(["\uFEFF \n\t"]) }),
+    /Empty markdown input on stdin/
+  );
+});
+
+test("resolveMarkdownInput flags take precedence over piped stdin", async () => {
+  const fixturePath = path.resolve(__dirname, "fixtures", "fixture-markdown-basic.md");
+  const untouched = fakeStdin(["from stdin"]);
+  const fileInput = await resolveMarkdownInput({ argv: [`--markdown-file=${fixturePath}`], stdin: untouched });
+  assert.equal(fileInput.source, "file");
+
+  const inlineInput = await resolveMarkdownInput({ argv: ["--markdown=inline"], stdin: fakeStdin(["from stdin"]) });
+  assert.equal(inlineInput.source, "inline");
+  assert.equal(inlineInput.markdown, "inline");
+});
+
+test("main dry-run converts markdown from injected stdin", async () => {
+  let converted = null;
+  const result = await main(["--dry-run"], {
+    stdin: fakeStdin(["# Hi\n\n- Tea"]),
+    markdownToEscposDetailed: (markdown) => {
+      converted = markdown;
+      return { bytes: [1, 2, 3], replacements: [] };
+    }
+  });
+  assert.equal(converted, "# Hi\n\n- Tea");
+  assert.equal(result.dryRun, true);
+  assert.equal(result.payloadLength, 3);
 });
 
 test("formatHelp includes core options", () => {
@@ -56,6 +128,7 @@ test("formatHelp includes core options", () => {
   assert.equal(text.includes("--print-area-width-mm"), true);
   assert.equal(text.includes("--code-page"), true);
   assert.equal(text.includes("--list-code-pages"), true);
+  assert.equal(text.includes("stdin"), true);
 });
 
 test("formatHelp includes posprint usage", () => {
@@ -391,15 +464,43 @@ test("validatePrinterUri upgrades https and warns using CLI warning format", () 
 test("validatePrinterUri remaps invalid URI to CLI message", () => {
   assert.throws(
     () => validatePrinterUri("not a uri"),
-    /Invalid --printer-uri value\. Use ipp:\/\/host:port\/printers\/queue\./
+    /Invalid --printer-uri value\. Use ipp:\/\/host:port\/printers\/queue or tcp:\/\/host\[:port\]\./
   );
 });
 
 test("validatePrinterUri rejects unsupported schemes", () => {
   assert.throws(
     () => validatePrinterUri("ftp://taiga.local/printers/TM-T88V"),
-    /Unsupported --printer-uri scheme\. Use ipp:\/\/ or ipps:\/\//
+    /Unsupported --printer-uri scheme\. Use ipp:\/\/, ipps:\/\/, or tcp:\/\//
   );
+});
+
+test("validatePrinterUri normalizes tcp URIs and remaps malformed ones to CLI message", () => {
+  const warnings = [];
+  assert.equal(validatePrinterUri("tcp://printer.local", { warn: (m) => warnings.push(m) }), "tcp://printer.local:9100");
+  assert.deepEqual(warnings, []);
+
+  for (const uri of ["tcp://printer.local:99999", "tcp://printer.local:0", "tcp://printer.local:9100/printers/queue"]) {
+    assert.throws(() => validatePrinterUri(uri), /Invalid --printer-uri value\. .*tcp:\/\/host\[:port\]/, uri);
+  }
+});
+
+test("main prints via tcp printer-uri and skips listPrinters", async () => {
+  let uriCall = null;
+
+  const result = await main(["--markdown=# hi", "--printer-uri=tcp://192.168.1.50"], {
+    platform: () => "linux",
+    listPrinters: async () => {
+      throw new Error("should not list printers when --printer-uri is set");
+    },
+    printRawToPrinterUri: async (uri, data) => {
+      uriCall = { uri, bytes: data.length };
+    }
+  });
+
+  assert.equal(result.printerUri, "tcp://192.168.1.50:9100");
+  assert.equal(uriCall.uri, "tcp://192.168.1.50:9100");
+  assert.equal(uriCall.bytes, result.payloadLength);
 });
 
 test("main prints via printer-uri on win32 and skips listPrinters", async () => {

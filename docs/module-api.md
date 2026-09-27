@@ -43,6 +43,15 @@ const escpos = markdownToEscpos("{{row:Espresso|2.50}}\n{{row:Total|12.00|fill=.
 
 With `strictMarkdown: true`, invalid QR or row shortcodes throw; otherwise a warning is logged and the shortcode is printed literally. See the README's Receipt rows section for row layout rules.
 
+## Table Rendering
+
+GFM tables print as monospace columns fitted to `charsPerLine`:
+
+- bold header row, then a dash separator
+- column alignment follows the separator row (`:---`, `:---:`, `---:`)
+- when the table is too wide, the widest columns shrink and cell text wraps inside its column; if the columns cannot fit at all, each row prints as wrapped `a | b | c` text
+- inline formatting inside cells prints as plain text
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:
@@ -71,6 +80,8 @@ printReceipt().catch((error) => {
 
 ## CommonJS Printer URI
 
+`printRawToPrinterUri(printerUri, data)` accepts `ipp://host:port/printers/queue` / `ipps://...` (IPP `Print-Job`) or `tcp://host[:port]` (raw bytes over a socket, port defaults to `9100`). A `tcp://` job resolves once the payload is flushed and the connection closes, and rejects on connection errors or after 10 seconds without progress.
+
 Print directly to an IPP/IPPS URI:
 
 ```js
@@ -84,6 +95,23 @@ async function printToUri() {
 }
 
 printToUri().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+```
+
+Print to a network printer over raw TCP:
+
+```js
+const { markdownToEscpos, printRawToPrinterUri } = require("@bestimmaa/posprint");
+
+async function printToNetworkPrinter() {
+  const escpos = markdownToEscpos("# Hello\n\n- Espresso", { charsPerLine: 42 });
+
+  await printRawToPrinterUri("tcp://192.168.1.50:9100", Buffer.from(escpos));
+}
+
+printToNetworkPrinter().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });
