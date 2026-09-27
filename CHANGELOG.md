@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The version history source of truth is git tags in the format `vMAJOR.MINOR.PATCH`.
 
+## [0.3.0] - 2026-09-27
+
+### Added
+
+- Added GFM table rendering as aligned monospace columns fitted to `charsPerLine`, with column alignment, a bold header row, and wrapping of long cells.
+- Added the `{{row:<left>|<right>|fill=<char>}}` shortcode for left/right aligned receipt lines such as item and price.
+- Added reading markdown from stdin, with `--markdown-file=-` or implicitly when input is piped and no input flag is given.
+- Added direct raw TCP printing to network printers via `tcp://host[:port]` printer URIs (default port 9100) on all platforms.
+- Added `--preview` to render a framed plain-text preview of the ESC/POS payload without printing, and the `previewEscpos` module export.
+- Added `--status` and `--check-status` to query real-time printer status (cover open, paper end, paper near end, errors) over `tcp://` printer URIs, and the `getPrinterStatus` module export.
+
+### Fixed
+
+- Fixed GFM tables being silently dropped from the output.
+- Fixed tight lists printing a blank line after every item.
+
 ## [0.2.5] - 2026-06-15
 
 ### Added
