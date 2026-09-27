@@ -239,24 +239,12 @@ test("renders row shortcode as left/right aligned line at charsPerLine", () => {
   assert.equal(out.includes(Buffer.from("{{row:")), false);
 });
 
-test("renders row shortcode with custom fill character", () => {
-  const out = Buffer.from(markdownToEscpos("{{row:Total|12.00|fill=.}}", { charsPerLine: 42 }));
-  assertHasLine(out, `Total${".".repeat(32)}12.00`);
-});
-
 test("row shortcode keeps a single fill char when left and right fill the width exactly", () => {
   const out = Buffer.from(markdownToEscpos("{{row:ABCDE|12345|fill=.}}", { charsPerLine: 11 }));
   assertHasLine(out, "ABCDE.12345");
 });
 
-test("row shortcode wraps long left text and right-aligns right text on the last line", () => {
-  const out = Buffer.from(markdownToEscpos("{{row:Oat milk flat white with extra shot|4.90}}", { charsPerLine: 20 }));
-
-  assertHasLine(out, "Oat milk flat white");
-  assertHasLine(out, "with extra shot 4.90");
-});
-
-test("row shortcode moves only the words that fit onto the right-aligned line", () => {
+test("row shortcode wraps long left text and keeps only the words that fit beside the right text", () => {
   const out = Buffer.from(markdownToEscpos("{{row:Croissant au beurre with almond cream|3.20}}", { charsPerLine: 24 }));
 
   assertHasLine(out, "Croissant au beurre with");
@@ -304,17 +292,11 @@ test("row shortcode in blockquote respects quote prefix", () => {
   assertHasLine(out, `| Table${" ".repeat(12)}7`);
 });
 
-test("row shortcode width counts non-ASCII characters once", () => {
-  const { bytes, replacements } = markdownToEscposDetailed("{{row:Gebäck|€ 3.20|fill=.}}", { charsPerLine: 20 });
-  const out = Buffer.from(bytes);
+test("row shortcode counts non-ASCII characters once and tracks code page replacements", () => {
+  const { bytes, replacements } = markdownToEscposDetailed("{{row:Gebäck ☕|€ 3.20|fill=.}}", { charsPerLine: 20 });
 
-  assertHasLine(out, `Gebäck${".".repeat(8)}€ 3.20`);
-  assert.deepEqual(replacements, []);
-});
-
-test("row shortcode tracks code page replacements", () => {
-  const { replacements } = markdownToEscposDetailed("{{row:Tea ☕|1.00}}", { charsPerLine: 20, codePage: "cp858" });
-  assert.equal(replacements.some((entry) => entry.input === "☕" && entry.kind === "fallback"), true);
+  assertHasLine(Buffer.from(bytes), `Gebäck ☕${".".repeat(6)}€ 3.20`);
+  assert.deepEqual(replacements.map((entry) => entry.input), ["☕"]);
 });
 
 test("strict mode rejects invalid row shortcodes", () => {

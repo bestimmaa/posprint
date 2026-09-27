@@ -154,11 +154,9 @@ Espresso                              2.50
 Total................................12.00
 ```
 
-- Consecutive row shortcodes in one paragraph print as separate lines; normal text lines around them print as usual.
-- `fill` must be exactly one character (default: space). At least one fill character always separates left and right.
-- Long left text wraps onto preceding lines; the right text stays right-aligned on the last line. Right text wider than the line wraps onto right-aligned lines of its own.
-- Rows inside lists and blockquotes keep the list marker/indent and quote prefix within the line width.
-- Inline emphasis inside a row is printed as plain text. `|` cannot be used inside left or right text.
+- `fill` must be exactly one character (default: space); at least one fill character separates left and right.
+- Long left text wraps onto preceding lines; the right text stays right-aligned on the last line.
+- Rows respect list markers and blockquote prefixes. Inline emphasis prints as plain text; `|` cannot appear inside left or right text.
 - Invalid row shortcodes fail with `--strict-markdown`; otherwise a warning is printed and the shortcode is printed literally.
 
 Show supported code pages:

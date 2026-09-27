@@ -41,12 +41,7 @@ const escpos = markdownToEscpos("{{row:Espresso|2.50}}\n{{row:Total|12.00|fill=.
 // Total................................12.00
 ```
 
-Row layout rules:
-
-- `fill` must be exactly one character; at least one fill character always separates left and right.
-- Long left text wraps onto preceding lines; right text stays right-aligned on the last line (right text wider than the line wraps onto right-aligned lines).
-- Rows respect list indentation and blockquote prefixes; inline emphasis is printed as plain text; `|` is not allowed inside left or right text.
-- With `strictMarkdown: true`, invalid QR or row shortcodes throw. Otherwise a warning is logged and the shortcode is printed literally.
+With `strictMarkdown: true`, invalid QR or row shortcodes throw; otherwise a warning is logged and the shortcode is printed literally. See the README's Receipt rows section for row layout rules.
 
 ## CommonJS Local Queue
 
