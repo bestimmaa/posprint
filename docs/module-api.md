@@ -108,7 +108,7 @@ Rendering rules:
 - double-width text (`GS !`) is spaced out, one extra column per character
 - raster images become `[image <width>x<height>]`, QR codes `[QR: <payload>]`, drawer pulses `[drawer]`
 - cuts become a dashed `✂ cut` line
-- unknown commands are skipped
+- only commands posprint itself emits are interpreted; other ESC/GS commands are skipped
 
 ```js
 const { markdownToEscpos, previewEscpos } = require("@bestimmaa/posprint");

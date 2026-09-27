@@ -150,17 +150,6 @@ function resolveCodePageById(escposId) {
   return Object.values(CODE_PAGES).find((page) => page.escposId === escposId) || null;
 }
 
-function decodeText(bytes, { codePage = "cp858" } = {}) {
-  const page = resolveCodePage(codePage);
-  let out = "";
-
-  for (const value of bytes || []) {
-    out += page.decodeByte(value);
-  }
-
-  return out;
-}
-
 function getSupportedCodePages() {
   return Object.values(CODE_PAGES).map(({ name, escposId }) => ({ name, escposId }));
 }
@@ -173,7 +162,6 @@ const exported = {
   resolveCodePage,
   resolveCodePageById,
   getSupportedCodePages,
-  decodeText,
   encodeText,
   encodeTextDetailed: encodeTextWithMetadata
 };

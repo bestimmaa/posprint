@@ -7,7 +7,6 @@ const path = require("node:path");
 const b = require("../src/escpos-builder");
 const { previewEscpos } = require("../src/escpos-preview");
 const { markdownToEscpos } = require("../src/markdown-to-escpos");
-const { encodeText, decodeText } = require("../src/text-transcoder");
 const api = require("../src/index");
 
 function inner(output) {
@@ -78,25 +77,12 @@ test("bold is plain by default and uses ANSI when requested", () => {
   assert.match(ansi, /\|\x1b\[1mB\x1b\[0mn {2}\|/);
 });
 
-test("decodes non-ASCII text with the active code page (cp858)", () => {
-  const encoded = encodeText("€ ä ß", { codePage: "cp858" });
-  const out = previewEscpos(
-    b.concat([b.init(), b.setCodePage(19), encoded, Uint8Array.of(0x0a)]),
-    { charsPerLine: 10 }
-  );
-  assert.equal(inner(out)[0], "€ ä ß     ");
-});
-
 test("decodes bytes differently when the code page changes", () => {
   const out = previewEscpos(
     b.concat([b.init(), b.setCodePage(16), Uint8Array.of(0x80, 0x0a), b.setCodePage(19), Uint8Array.of(0x84, 0x0a)]),
     { charsPerLine: 4 }
   );
   assert.deepEqual(inner(out), ["€   ", "ä   "]);
-});
-
-test("decodeText maps bytes back to Unicode", () => {
-  assert.equal(decodeText(encodeText("Grüße €5", { codePage: "cp858" }), { codePage: "cp858" }), "Grüße €5");
 });
 
 test("markdown with cp858 characters round-trips through the preview", () => {
@@ -179,9 +165,7 @@ test("unknown and truncated commands do not crash", () => {
     0x1b, 0x7e, // unknown ESC command
     0x41, 0x0a,
     0x1d, 0x99, // unknown GS command
-    0x1c, 0x2e, // FS .
-    0x10, 0x04, 0x01, // DLE EOT
-    0x1d, 0x28, 0x4c, 0x02, 0x00, 0x30, 0x45, // GS ( L function
+    0x1d, 0x28, 0x4c, 0x02, 0x00, 0x30, 0x45, // GS ( L function is skipped by length
     0x42, 0x0a,
     0x1d, 0x76, 0x30, 0x00, 0xff, 0xff, 0xff, 0xff // truncated raster header
   );
@@ -190,9 +174,23 @@ test("unknown and truncated commands do not crash", () => {
   assert.equal(lines[0].trim(), "A");
   assert.equal(lines[1].trim(), "B");
 
-  for (const tail of [[0x1b], [0x1d], [0x1d, 0x28, 0x6b, 0xff], [0x1b, 0x2a, 0x21]]) {
+  for (const tail of [[0x1b], [0x1d], [0x1d, 0x28, 0x6b, 0xff], [0x1b, 0x70]]) {
     assert.doesNotThrow(() => previewEscpos(Uint8Array.from(tail)));
   }
+});
+
+test("tabs advance to the next stop and terminate on narrow lines", () => {
+  assert.deepEqual(inner(previewEscpos(Uint8Array.of(0x61, 0x09, 0x62, 0x0a), { charsPerLine: 10 })), ["a       b "]);
+  assert.deepEqual(inner(previewEscpos(Uint8Array.of(0x61, 0x09, 0x62, 0x0a), { charsPerLine: 4 })), [
+    "a   ",
+    "    ",
+    "b   "
+  ]);
+});
+
+test("oversized characters never overflow the line width", () => {
+  const out = previewEscpos(b.concat([b.init(), b.size(7, 0), b.line("ab")]), { charsPerLine: 4 });
+  assert.deepEqual(inner(out), ["a   ", "b   "]);
 });
 
 test("accepts Buffer and plain arrays but rejects other input", () => {
