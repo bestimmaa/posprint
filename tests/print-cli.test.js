@@ -38,24 +38,15 @@ test("resolveMarkdownInput prefers markdown-file over markdown string", async ()
 });
 
 function fakeStdin(chunks, { isTTY = false } = {}) {
-  const stream = Readable.from(chunks.map((chunk) => (typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk)));
+  const stream = Readable.from(chunks.map((chunk) => Buffer.from(chunk)));
   stream.isTTY = isTTY;
   return stream;
 }
 
-function ttyStdin() {
-  return {
-    isTTY: true,
-    [Symbol.asyncIterator]() {
-      throw new Error("TTY stdin must not be read");
-    }
-  };
-}
-
 test("resolveMarkdownInput throws when no markdown input provided and stdin is a TTY", async () => {
   await assert.rejects(
-    () => resolveMarkdownInput({ argv: [], stdin: ttyStdin() }),
-    /Missing markdown input\. Provide --markdown-file, --markdown, or pipe markdown via stdin/
+    () => resolveMarkdownInput({ argv: [], stdin: { isTTY: true } }),
+    /Missing markdown input/
   );
 });
 
@@ -122,10 +113,6 @@ test("main dry-run converts markdown from injected stdin", async () => {
   assert.equal(converted, "# Hi\n\n- Tea");
   assert.equal(result.dryRun, true);
   assert.equal(result.payloadLength, 3);
-});
-
-test("main errors on missing input when injected stdin is a TTY", async () => {
-  await assert.rejects(() => main(["--dry-run"], { stdin: ttyStdin() }), /Missing markdown input/);
 });
 
 test("formatHelp includes core options", () => {

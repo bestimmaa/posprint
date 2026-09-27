@@ -3,6 +3,7 @@
 
 const os = require("os");
 const { readFile } = require("fs/promises");
+const { text } = require("stream/consumers");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
 const { markdownToEscposDetailed } = require("./markdown-to-escpos");
@@ -32,9 +33,7 @@ function formatHelp() {
     "  --help                   Show help",
     "  --version                Show version",
     "",
-    "Input precedence: --markdown-file, then --markdown, then piped stdin.",
-    "Stdin is read when --markdown-file=- is given, or when no input flag is",
-    "given and stdin is not a terminal, e.g. cat receipt.md | posprint --dry-run"
+    "Without --markdown-file or --markdown, piped stdin is read."
   ].join("\n");
 }
 
@@ -172,33 +171,19 @@ function warnOnFallbackReplacements(replacements, codePage, warn) {
   warn(`Code page ${codePage} replaced unsupported characters with '?': ${fallbackInputs.join(", ")}`);
 }
 
-async function readStreamAsUtf8(stream) {
-  const chunks = [];
-
-  for await (const chunk of stream) {
-    chunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
-  }
-
-  return Buffer.concat(chunks).toString("utf8");
-}
-
-function stripBom(text) {
-  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
-}
-
 async function readMarkdownFromStdin(stdin) {
-  const content = stripBom(await readStreamAsUtf8(stdin));
+  // text() decodes UTF-8 across chunk boundaries and strips a leading BOM.
+  const markdown = await text(stdin);
 
-  if (!content.trim()) {
-    throw new Error("Empty markdown input on stdin. Pipe non-empty markdown or use --markdown-file / --markdown.");
+  if (!markdown.trim()) {
+    throw new Error("Empty markdown input on stdin.");
   }
 
-  return { source: "stdin", markdown: content, markdownFile: null };
+  return { source: "stdin", markdown, markdownFile: null };
 }
 
-// Precedence: --markdown-file (a value of "-" means stdin) > --markdown > piped stdin.
-// Stdin is only read implicitly when neither flag is given and stdin is not a TTY.
-async function resolveMarkdownInput({ argv, stdin = process.stdin, readFileFn = readFile }) {
+// Precedence: --markdown-file ("-" means stdin) > --markdown > piped (non-TTY) stdin.
+async function resolveMarkdownInput({ argv, stdin = process.stdin }) {
   const markdownFile = getArgValue(argv, "--markdown-file");
   const markdownInline = getArgValue(argv, "--markdown");
 
@@ -207,7 +192,7 @@ async function resolveMarkdownInput({ argv, stdin = process.stdin, readFileFn = 
   }
 
   if (markdownFile) {
-    const content = await readFileFn(markdownFile, "utf8");
+    const content = await readFile(markdownFile, "utf8");
     return { source: "file", markdown: content, markdownFile };
   }
 
@@ -215,7 +200,7 @@ async function resolveMarkdownInput({ argv, stdin = process.stdin, readFileFn = 
     return { source: "inline", markdown: markdownInline, markdownFile: null };
   }
 
-  if (stdin && !stdin.isTTY) {
+  if (!stdin.isTTY) {
     return readMarkdownFromStdin(stdin);
   }
 
@@ -265,7 +250,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const layoutOptions = parseLayoutOptions(argv);
   const codePage = parseCodePageOption(argv);
 
-  const { markdown } = await resolveMarkdownInput({ argv, stdin: deps.stdin || process.stdin });
+  const { markdown } = await resolveMarkdownInput({ argv, stdin: deps.stdin });
   const conversionOptions = {
     charsPerLine,
     strictMarkdown,
