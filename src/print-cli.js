@@ -3,6 +3,7 @@
 
 const os = require("os");
 const { readFile } = require("fs/promises");
+const { text } = require("stream/consumers");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
 const { markdownToEscposDetailed } = require("./markdown-to-escpos");
@@ -16,10 +17,11 @@ function formatHelp() {
     "Usage: posprint [options]",
     "",
     "Options:",
-    "  --markdown-file=<path>   Read markdown from file",
+    "  --markdown-file=<path>   Read markdown from file (use - for stdin)",
     "  --markdown=<text>        Read markdown inline",
     "  --printer=<name>         Select printer",
-    "  --printer-uri=<uri>      Print directly to IPP/IPPS URI (ipp://...)",
+    "  --printer-uri=<uri>      Print directly to an IPP/IPPS URI (ipp://host:631/printers/queue)",
+    "                           or raw TCP/JetDirect (tcp://host[:port], default port 9100)",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
     "  --font=A|B|C             Select ESC/POS font",
     "  --character-spacing-mm=<n>  Character spacing in mm (>= 0)",
@@ -32,7 +34,9 @@ function formatHelp() {
     "  --dry-run                Build payload without printing",
     "  --preview                Show a text preview of the payload (implies --dry-run)",
     "  --help                   Show help",
-    "  --version                Show version"
+    "  --version                Show version",
+    "",
+    "Without --markdown-file or --markdown, piped stdin is read."
   ].join("\n");
 }
 
@@ -73,11 +77,11 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
     return normalizedUri;
   } catch (error) {
     if (error && error.code === PRINTER_URI_ERROR_CODES.INVALID_URI) {
-      throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
+      throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue or tcp://host[:port].");
     }
 
     if (error && error.code === PRINTER_URI_ERROR_CODES.UNSUPPORTED_SCHEME) {
-      throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
+      throw new Error("Unsupported --printer-uri scheme. Use ipp://, ipps://, or tcp://.");
     }
 
     throw error;
@@ -170,9 +174,25 @@ function warnOnFallbackReplacements(replacements, codePage, warn) {
   warn(`Code page ${codePage} replaced unsupported characters with '?': ${fallbackInputs.join(", ")}`);
 }
 
-async function resolveMarkdownInput({ argv }) {
+async function readMarkdownFromStdin(stdin) {
+  // text() decodes UTF-8 across chunk boundaries and strips a leading BOM.
+  const markdown = await text(stdin);
+
+  if (!markdown.trim()) {
+    throw new Error("Empty markdown input on stdin.");
+  }
+
+  return { source: "stdin", markdown, markdownFile: null };
+}
+
+// Precedence: --markdown-file ("-" means stdin) > --markdown > piped (non-TTY) stdin.
+async function resolveMarkdownInput({ argv, stdin = process.stdin }) {
   const markdownFile = getArgValue(argv, "--markdown-file");
   const markdownInline = getArgValue(argv, "--markdown");
+
+  if (markdownFile === "-") {
+    return readMarkdownFromStdin(stdin);
+  }
 
   if (markdownFile) {
     const content = await readFile(markdownFile, "utf8");
@@ -183,7 +203,11 @@ async function resolveMarkdownInput({ argv }) {
     return { source: "inline", markdown: markdownInline, markdownFile: null };
   }
 
-  throw new Error("Missing markdown input. Provide --markdown-file or --markdown.");
+  if (!stdin.isTTY) {
+    return readMarkdownFromStdin(stdin);
+  }
+
+  throw new Error("Missing markdown input. Provide --markdown-file, --markdown, or pipe markdown via stdin.");
 }
 
 async function main(argv = process.argv.slice(2), deps = {}) {
@@ -230,7 +254,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const layoutOptions = parseLayoutOptions(argv);
   const codePage = parseCodePageOption(argv);
 
-  const { markdown } = await resolveMarkdownInput({ argv });
+  const { markdown } = await resolveMarkdownInput({ argv, stdin: deps.stdin });
   const conversionOptions = {
     charsPerLine,
     strictMarkdown,

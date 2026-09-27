@@ -4,6 +4,8 @@ const os = require("node:os");
 const windows = require("./windows-raw-printer");
 const linux = require("./linux-cups-printer");
 const ipp = require("./ipp-printer");
+const tcp = require("./tcp-printer");
+const { getPrinterUriScheme } = require("./printer-uri");
 
 function assertSupportedPlatform(platform) {
   if (platform !== "win32" && platform !== "linux" && platform !== "darwin") {
@@ -11,7 +13,7 @@ function assertSupportedPlatform(platform) {
   }
 }
 
-function createPrintBridge({ platform = os.platform, windows: win = windows, linux: lin = linux, ipp: uri = ipp } = {}) {
+function createPrintBridge({ platform = os.platform, windows: win = windows, linux: lin = linux, ipp: uri = ipp, tcp: raw = tcp } = {}) {
   async function listPrinters() {
     const platformName = platform();
     assertSupportedPlatform(platformName);
@@ -37,6 +39,10 @@ function createPrintBridge({ platform = os.platform, windows: win = windows, lin
   async function printRawToPrinterUri(printerUri, data) {
     const platformName = platform();
     assertSupportedPlatform(platformName);
+
+    if (getPrinterUriScheme(printerUri) === "tcp") {
+      return raw.printRawToTcpPrinter(printerUri, data);
+    }
 
     return uri.printRawToPrinterUri(printerUri, data);
   }

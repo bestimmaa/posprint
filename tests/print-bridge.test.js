@@ -92,6 +92,33 @@ test("bridge dispatches printRawToPrinterUri on linux", async () => {
   );
 });
 
+for (const platformName of ["linux", "darwin", "win32"]) {
+  test(`bridge dispatches tcp printer URIs to tcp backend on ${platformName}`, async () => {
+    let tcpCall = null;
+    const bridge = createPrintBridge({
+      platform: () => platformName,
+      windows: {},
+      linux: {},
+      ipp: {
+        printRawToPrinterUri: async () => {
+          throw new Error("tcp URIs must not go through IPP");
+        }
+      },
+      tcp: {
+        printRawToTcpPrinter: async (uri, data) => {
+          tcpCall = { uri, data };
+          return { backend: "tcp" };
+        }
+      }
+    });
+
+    const payload = Buffer.from("x");
+    assert.deepEqual(await bridge.printRawToPrinterUri("tcp://192.168.1.50:9100", payload), { backend: "tcp" });
+    assert.equal(tcpCall.uri, "tcp://192.168.1.50:9100");
+    assert.equal(tcpCall.data, payload);
+  });
+}
+
 test("bridge throws on unsupported platform", async () => {
   const bridge = createPrintBridge({
     platform: () => "freebsd",

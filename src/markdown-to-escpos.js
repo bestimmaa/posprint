@@ -698,6 +698,77 @@ function renderCodeBlock(text, chunks, charsPerLine, codePageName, replacements 
   chunks.push(encodedLine("", codePageName, replacements));
 }
 
+function collectTableRows(tokens, startIndex, strictMarkdown) {
+  const rows = [];
+  let i = startIndex + 1;
+
+  for (; i < tokens.length && tokens[i].type !== "table_close"; i += 1) {
+    const token = tokens[i];
+
+    if (token.type === "tr_open") {
+      rows.push([]);
+    } else if (token.type === "th_open" || token.type === "td_open") {
+      const alignMatch = /text-align:\s*(left|center|right)/.exec(token.attrGet("style") || "");
+      rows[rows.length - 1].push({
+        text: inlineToText(tokens[i + 1].children, strictMarkdown).replace(/\s+/g, " ").trim(),
+        align: alignMatch ? alignMatch[1] : "left"
+      });
+    }
+  }
+
+  return { rows, endIndex: i };
+}
+
+function padTableCell(text, width, alignment) {
+  // Pad by code points: each one encodes to a single printer byte.
+  const room = Math.max(0, width - Array.from(text).length);
+  const left = alignment === "right" ? room : alignment === "center" ? Math.floor(room / 2) : 0;
+  return " ".repeat(left) + text + " ".repeat(room - left);
+}
+
+function renderTable(tokens, startIndex, chunks, charsPerLine, strictMarkdown, codePageName, prefix, replacements) {
+  const { rows, endIndex } = collectTableRows(tokens, startIndex, strictMarkdown);
+  const header = rows[0];
+  const width = Math.max(1, charsPerLine - prefix.length);
+  const widths = header.map((_, col) => Math.max(1, ...rows.map((row) => row[col].text.length)));
+  const tableWidth = (gap) => widths.reduce((sum, value) => sum + value, 0) + (widths.length - 1) * gap;
+  const gap = tableWidth(2) <= width ? 2 : 1;
+  // Columns fit when each keeps at least one character; otherwise cells print inline.
+  const fits = widths.length * 2 - 1 <= width;
+
+  while (fits && tableWidth(gap) > width) {
+    widths[widths.indexOf(Math.max(...widths))] -= 1;
+  }
+
+  const rowLines = (row) => {
+    if (!fits) {
+      return wrapText(row.map((cell) => cell.text).join(" | "), width);
+    }
+
+    const cellLines = row.map((cell, col) => wrapText(cell.text, widths[col]));
+    const height = Math.max(...cellLines.map((lines) => lines.length));
+    return Array.from({ length: height }, (_, lineIndex) =>
+      cellLines
+        .map((lines, col) => padTableCell(lines[lineIndex] || "", widths[col], header[col].align))
+        .join(" ".repeat(gap))
+        .trimEnd()
+    );
+  };
+
+  rows.forEach((row, rowIndex) => {
+    for (const value of rowLines(row)) {
+      renderStyledLine([{ text: value, bold: rowIndex === 0, italic: false }], chunks, codePageName, prefix, replacements);
+    }
+
+    if (rowIndex === 0) {
+      chunks.push(encodedLine(`${prefix}${"-".repeat(fits ? tableWidth(gap) : width)}`, codePageName, replacements));
+    }
+  });
+
+  chunks.push(encodedLine("", codePageName, replacements));
+  return endIndex;
+}
+
 function toDots(mm) {
   return Math.round(mm * 8);
 }
@@ -789,6 +860,15 @@ function markdownToEscposDetailed(markdown, options = {}) {
   let listItemDepth = 0;
   let blockquoteDepth = 0;
 
+  const renderPendingListMarker = () => {
+    const currentListItem = listItemStack[listItemStack.length - 1];
+    if (listItemDepth > 0 && currentListItem && !currentListItem.hasRenderedContent) {
+      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+      chunks.push(line(`${quotePrefix}${getListIndent(listItemDepth)}${currentListItem.marker} `));
+      currentListItem.hasRenderedContent = true;
+    }
+  };
+
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
 
@@ -864,29 +944,13 @@ function markdownToEscposDetailed(markdown, options = {}) {
     }
 
     if (token.type === "bullet_list_open") {
-      if (listItemDepth > 0) {
-        const currentListItem = listItemStack[listItemStack.length - 1];
-        if (currentListItem && !currentListItem.hasRenderedContent) {
-          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          const indent = getListIndent(listItemDepth);
-          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
-          currentListItem.hasRenderedContent = true;
-        }
-      }
+      renderPendingListMarker();
       listStack.push({ ordered: false, index: 0 });
       continue;
     }
 
     if (token.type === "ordered_list_open") {
-      if (listItemDepth > 0) {
-        const currentListItem = listItemStack[listItemStack.length - 1];
-        if (currentListItem && !currentListItem.hasRenderedContent) {
-          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          const indent = getListIndent(listItemDepth);
-          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
-          currentListItem.hasRenderedContent = true;
-        }
-      }
+      renderPendingListMarker();
       listStack.push({ ordered: true, index: Number(token.attrGet("start") || 1) });
       continue;
     }
@@ -912,6 +976,14 @@ function markdownToEscposDetailed(markdown, options = {}) {
     if (token.type === "list_item_close") {
       listItemDepth = Math.max(0, listItemDepth - 1);
       listItemStack.pop();
+      continue;
+    }
+
+    if (token.type === "table_open") {
+      renderPendingListMarker();
+      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+      const listPrefix = listItemDepth > 0 ? `${getListIndent(listItemDepth)}  ` : "";
+      i = renderTable(tokens, i, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, `${quotePrefix}${listPrefix}`, replacements);
       continue;
     }
 
