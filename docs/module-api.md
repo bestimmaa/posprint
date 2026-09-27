@@ -26,6 +26,19 @@ Other unsupported characters become `?`.
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
 
+## Table Rendering
+
+GFM tables are rendered as monospace text columns fitted to `charsPerLine`:
+
+- the header row prints in bold, followed by a dash separator across the table width
+- column alignment follows the separator row (`:---` left, `:---:` center, `---:` right)
+- columns are sized to content; when the table is too wide, the widest columns shrink and cell text wraps inside its column
+- inline formatting inside cells is printed as plain text
+
+```js
+const escpos = markdownToEscpos("| Item | Price |\n|---|---:|\n| Espresso | 2.50 |", { charsPerLine: 42 });
+```
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:
