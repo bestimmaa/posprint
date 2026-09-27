@@ -160,34 +160,169 @@ function parseQrShortcode(raw) {
   return { payload, size: options.size, ec: options.ec };
 }
 
-function scanTextForQrShortcodes(value) {
+const SHORTCODE_OPENERS = [
+  { type: "qr", opener: "{{qr:" },
+  { type: "row", opener: "{{row:" }
+];
+
+function findNextShortcodeOpener(value, fromIndex = 0) {
+  let best = null;
+
+  for (const candidate of SHORTCODE_OPENERS) {
+    const index = value.indexOf(candidate.opener, fromIndex);
+    if (index !== -1 && (!best || index < best.index)) {
+      best = { index, type: candidate.type, opener: candidate.opener };
+    }
+  }
+
+  return best;
+}
+
+function findLastShortcodeOpener(value) {
+  let best = null;
+
+  for (const candidate of SHORTCODE_OPENERS) {
+    const index = value.lastIndexOf(candidate.opener);
+    if (index !== -1 && (!best || index > best.index)) {
+      best = { index, type: candidate.type, opener: candidate.opener };
+    }
+  }
+
+  return best;
+}
+
+function containsShortcodeOpener(value, type = null) {
+  const textValue = String(value || "");
+  return SHORTCODE_OPENERS.some((candidate) => (!type || candidate.type === type) && textValue.includes(candidate.opener));
+}
+
+function scanTextForShortcodes(value) {
   const textValue = String(value || "");
   const out = [];
   let cursor = 0;
 
   while (cursor < textValue.length) {
-    const start = textValue.indexOf("{{qr:", cursor);
+    const next = findNextShortcodeOpener(textValue, cursor);
 
-    if (start === -1) {
+    if (!next) {
       out.push({ type: "text", value: textValue.slice(cursor) });
       break;
     }
 
+    const start = next.index;
     if (start > cursor) {
       out.push({ type: "text", value: textValue.slice(cursor, start) });
     }
 
-    const end = textValue.indexOf("}}", start + 5);
+    const end = textValue.indexOf("}}", start + next.opener.length);
     if (end === -1) {
       out.push({ type: "text", value: textValue.slice(start) });
       break;
     }
 
-    out.push({ type: "qr", raw: textValue.slice(start, end + 2) });
+    out.push({ type: next.type, raw: textValue.slice(start, end + 2) });
     cursor = end + 2;
   }
 
   return out;
+}
+
+function textWidth(value) {
+  return Array.from(String(value || "")).length;
+}
+
+function parseRowShortcode(raw) {
+  const full = String(raw || "");
+  const inner = full.slice(2, -2);
+
+  if (!inner.startsWith("row:")) {
+    throw new Error("missing row: prefix");
+  }
+
+  const parts = inner.slice(4).split("|");
+
+  if (parts.length < 2) {
+    throw new Error("expected {{row:<left>|<right>}}");
+  }
+
+  const left = String(parts.shift()).replace(/\s+/g, " ").trim();
+  const right = String(parts.shift()).replace(/\s+/g, " ").trim();
+
+  if (!left && !right) {
+    throw new Error("left or right text is required");
+  }
+
+  const options = { fill: " " };
+
+  for (const part of parts) {
+    const idx = part.indexOf("=");
+    if (idx <= 0) {
+      throw new Error(`invalid option: ${part}`);
+    }
+
+    const key = part.slice(0, idx).trim();
+    const rawValue = part.slice(idx + 1);
+
+    if (key === "fill") {
+      const value = textWidth(rawValue) === 1 ? rawValue : rawValue.trim();
+      if (textWidth(value) !== 1) {
+        throw new Error("fill must be exactly one character");
+      }
+      options.fill = value;
+      continue;
+    }
+
+    throw new Error(`unknown option: ${part}`);
+  }
+
+  return { left, right, fill: options.fill };
+}
+
+function layoutRow({ left, right, fill }, width) {
+  const safeWidth = Number.isInteger(width) && width > 0 ? width : 42;
+  const fillChar = fill || " ";
+  const rightWidth = textWidth(right);
+
+  if (rightWidth + 1 > safeWidth) {
+    // Right text cannot share a line with a fill char: print left text on its own
+    // line(s) and wrap the right text onto right-aligned lines below it.
+    const lines = left ? wrapText(left, safeWidth) : [];
+    for (const value of wrapText(right, safeWidth)) {
+      lines.push(fillChar.repeat(Math.max(0, safeWidth - textWidth(value))) + value);
+    }
+    return lines;
+  }
+
+  const available = safeWidth - rightWidth - 1;
+  let lines = [];
+  let lastLeft = left;
+
+  if (textWidth(left) > available) {
+    lines = wrapText(left, safeWidth);
+    const words = lines.pop().split(" ");
+    const tail = [];
+    let tailWidth = 0;
+
+    while (words.length) {
+      const word = words[words.length - 1];
+      const nextWidth = tailWidth ? tailWidth + 1 + textWidth(word) : textWidth(word);
+      if (nextWidth > available) {
+        break;
+      }
+      tail.unshift(word);
+      tailWidth = nextWidth;
+      words.pop();
+    }
+
+    if (words.length) {
+      lines.push(words.join(" "));
+    }
+    lastLeft = tail.join(" ");
+  }
+
+  const fillWidth = safeWidth - textWidth(lastLeft) - rightWidth;
+  lines.push(`${lastLeft}${fillChar.repeat(fillWidth)}${right}`);
+  return lines;
 }
 
 function collectInlineRange(children, startIndex, openType, closeType) {
@@ -492,16 +627,19 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "", repla
   chunks.push(concat(parts));
 }
 
-function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "", replacements = null) {
+function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "", replacements = null, firstPrefix = null) {
   const safePrefix = String(prefix || "");
   const rowWidth = Math.max(1, charsPerLine - safePrefix.length);
   const rows = splitSegmentsByBreaks(segments);
+  let pendingFirstPrefix = firstPrefix == null ? null : String(firstPrefix);
 
   for (const row of rows) {
     const wrapped = splitSegmentsByWidth(row, rowWidth);
 
     for (const wrappedLine of wrapped) {
-      renderStyledLine(wrappedLine, chunks, codePageName, safePrefix, replacements);
+      const linePrefix = pendingFirstPrefix == null ? safePrefix : pendingFirstPrefix;
+      pendingFirstPrefix = null;
+      renderStyledLine(wrappedLine, chunks, codePageName, linePrefix, replacements);
     }
   }
 }
@@ -536,32 +674,107 @@ function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, c
   chunks.push(encodedLine("", codePageName, replacements));
 }
 
-function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null) {
+const ROW_SPANNABLE_TOKEN_TYPES = new Set(["strong_open", "strong_close", "em_open", "em_close", "s_open", "s_close"]);
+
+function isBreakToken(token) {
+  return Boolean(token) && (token.type === "softbreak" || token.type === "hardbreak");
+}
+
+function renderInlineChildrenWithImages(
+  children,
+  chunks,
+  charsPerLine,
+  strictMarkdown,
+  codePageName,
+  prefix = "",
+  replacements = null,
+  firstPrefix = null
+) {
   const buffered = [];
   const inlineChildren = Array.isArray(children) ? children : [];
+  const safePrefix = String(prefix || "");
+  let pendingFirstPrefix = firstPrefix == null ? null : String(firstPrefix);
+  let afterRow = false;
+
+  function takeLinePrefix() {
+    const value = pendingFirstPrefix == null ? safePrefix : pendingFirstPrefix;
+    pendingFirstPrefix = null;
+    return value;
+  }
 
   function flushBuffered() {
     if (!buffered.length) {
       return;
     }
     const segments = inlineToSegments(buffered, strictMarkdown);
-    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix, replacements);
     buffered.length = 0;
+    if (!segmentsToText(segments)) {
+      return;
+    }
+    const linePrefix = pendingFirstPrefix;
+    pendingFirstPrefix = null;
+    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, safePrefix, replacements, linePrefix);
   }
 
-  function consumeSpanningQrShortcode(startIndex) {
+  function trimBufferedTail() {
+    while (buffered.length) {
+      const last = buffered[buffered.length - 1];
+
+      if (isBreakToken(last)) {
+        buffered.pop();
+        continue;
+      }
+
+      if (last.type === "text") {
+        const trimmed = String(last.content || "").replace(/\s+$/, "");
+        if (!trimmed) {
+          buffered.pop();
+          continue;
+        }
+        buffered[buffered.length - 1] = { ...last, content: trimmed };
+      }
+
+      break;
+    }
+  }
+
+  function bufferText(token, value) {
+    let content = String(value || "");
+    if (afterRow) {
+      content = content.replace(/^\s+/, "");
+    }
+    if (!content) {
+      return;
+    }
+    afterRow = false;
+    buffered.push({ ...token, type: "text", content });
+  }
+
+  function renderRow(parsed) {
+    trimBufferedTail();
+    flushBuffered();
+
+    const rowWidth = Math.max(1, charsPerLine - textWidth(safePrefix));
+    for (const value of layoutRow(parsed, rowWidth)) {
+      chunks.push(encodedLine(`${takeLinePrefix()}${value}`, codePageName, replacements));
+    }
+    afterRow = true;
+  }
+
+  function consumeSpanningShortcode(startIndex) {
     const token = inlineChildren[startIndex];
     if (!token || (token.type !== "text" && token.type !== "code_inline")) {
       return null;
     }
 
     const value = String(token.content || "");
-    const start = value.indexOf("{{qr:");
-    if (start === -1) {
+    const opener = findLastShortcodeOpener(value);
+    if (!opener) {
       return null;
     }
 
-    if (value.indexOf("}}", start + 5) !== -1) {
+    const searchFrom = opener.index + opener.opener.length;
+    if (value.indexOf("}}", searchFrom) !== -1) {
       return { content: value, endIndex: startIndex };
     }
 
@@ -575,9 +788,14 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
       }
 
       if (next.type === "link_open" || next.type === "link_close") {
-        if (combined.indexOf("}}", start + 5) !== -1) {
+        if (combined.indexOf("}}", searchFrom) !== -1) {
           return { content: combined, endIndex: index };
         }
+        continue;
+      }
+
+      if (opener.type === "row" && ROW_SPANNABLE_TOKEN_TYPES.has(next.type)) {
+        // Row text is printed plain: drop inline emphasis markers.
         continue;
       }
 
@@ -587,7 +805,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
 
       combined += String(next.content || "");
 
-      if (combined.indexOf("}}", start + 5) !== -1) {
+      if (combined.indexOf("}}", searchFrom) !== -1) {
         return { content: combined, endIndex: index };
       }
     }
@@ -600,6 +818,7 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
 
     if (token.type === "image") {
       flushBuffered();
+      afterRow = false;
 
       const src = token.attrGet("src");
       const raster = imageTokenToRaster({ src, charsPerLine, threshold: 128 });
@@ -612,23 +831,36 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
     }
 
     if (token.type === "text" || token.type === "code_inline") {
-      const spanning = consumeSpanningQrShortcode(i);
+      const spanning = consumeSpanningShortcode(i);
       const source = spanning ? spanning.content : String(token.content || "");
       if (spanning) {
         i = spanning.endIndex;
       }
 
-      const parts = scanTextForQrShortcodes(source);
+      const parts = scanTextForShortcodes(source);
 
       for (const part of parts) {
         if (part.type === "text") {
-          if (part.value) {
-            buffered.push({ ...token, type: "text", content: part.value });
+          bufferText(token, part.value);
+          continue;
+        }
+
+        if (part.type === "row") {
+          try {
+            renderRow(parseRowShortcode(part.raw));
+          } catch (error) {
+            const message = `Invalid row shortcode "${part.raw}": ${error.message}`;
+            if (strictMarkdown) {
+              throw new Error(message);
+            }
+            console.warn(message);
+            bufferText(token, part.raw);
           }
           continue;
         }
 
         flushBuffered();
+        afterRow = false;
 
         try {
           const parsed = parseQrShortcode(part.raw);
@@ -648,6 +880,11 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
       continue;
     }
 
+    if (afterRow && isBreakToken(token)) {
+      continue;
+    }
+
+    afterRow = false;
     buffered.push(token);
   }
 
@@ -658,12 +895,12 @@ function childrenContainImage(children) {
   return Array.isArray(children) && children.some((token) => token.type === "image");
 }
 
-function childrenContainQrShortcode(children) {
+function childrenContainShortcode(children, type) {
   return Array.isArray(children) && children.some((token) => {
     if (token.type !== "text" && token.type !== "code_inline") {
       return false;
     }
-    return String(token.content || "").includes("{{qr:");
+    return containsShortcodeOpener(token.content, type);
   });
 }
 
@@ -809,7 +1046,8 @@ function markdownToEscposDetailed(markdown, options = {}) {
       if (listItemDepth > 0) {
         const currentListItem = listItemStack[listItemStack.length - 1];
         const hasImage = childrenContainImage(children);
-        const hasQrShortcode = childrenContainQrShortcode(children);
+        const hasQrShortcode = childrenContainShortcode(children, "qr");
+        const hasRowShortcode = childrenContainShortcode(children, "row");
 
         if (hasImage || hasQrShortcode) {
           if (currentListItem && !currentListItem.hasRenderedContent) {
@@ -826,6 +1064,30 @@ function markdownToEscposDetailed(markdown, options = {}) {
             selectedCodePage.name,
             `${quotePrefix}${getListIndent(listItemDepth)}  `,
             replacements
+          );
+          chunks.push(line(""));
+          i += 2;
+          continue;
+        }
+
+        if (hasRowShortcode) {
+          // Hanging indent: the marker leads the first line, later lines align under the text.
+          const indent = getListIndent(listItemDepth);
+          const marker = currentListItem && !currentListItem.hasRenderedContent ? `${currentListItem.marker} ` : "";
+          const hanging = " ".repeat(currentListItem ? currentListItem.marker.length + 1 : 2);
+          if (currentListItem) {
+            currentListItem.hasRenderedContent = true;
+          }
+
+          renderInlineChildrenWithImages(
+            children,
+            chunks,
+            charsPerLine,
+            strictMarkdown,
+            selectedCodePage.name,
+            `${quotePrefix}${indent}${hanging}`,
+            replacements,
+            marker ? `${quotePrefix}${indent}${marker}` : null
           );
           chunks.push(line(""));
           i += 2;

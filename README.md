@@ -73,7 +73,7 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI. This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
-- `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
+- `--strict-markdown` reject unsupported constructs and invalid QR/row shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
 - `--font=A|B|C` select the ESC/POS font
@@ -136,8 +136,30 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 - Inline markdown styling with bold, emphasis, and readable strikethrough handling
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
+- Left/right receipt rows like `{{row:Espresso|2.50}}` or `{{row:Total|12.00|fill=.}}` (see [Receipt rows](#receipt-rows))
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
 - Unicode-to-code-page conversion with `cp858` as the default
+
+### Receipt rows
+
+Use `{{row:<left>|<right>[|fill=<char>]}}` to print a line with left text, fill characters, and right-aligned text spanning exactly `charsPerLine`:
+
+```markdown
+{{row:Espresso|2.50}}
+{{row:Total|12.00|fill=.}}
+```
+
+```text
+Espresso                              2.50
+Total................................12.00
+```
+
+- Consecutive row shortcodes in one paragraph print as separate lines; normal text lines around them print as usual.
+- `fill` must be exactly one character (default: space). At least one fill character always separates left and right.
+- Long left text wraps onto preceding lines; the right text stays right-aligned on the last line. Right text wider than the line wraps onto right-aligned lines of its own.
+- Rows inside lists and blockquotes keep the list marker/indent and quote prefix within the line width.
+- Inline emphasis inside a row is printed as plain text. `|` cannot be used inside left or right text.
+- Invalid row shortcodes fail with `--strict-markdown`; otherwise a warning is printed and the shortcode is printed literally.
 
 Show supported code pages:
 

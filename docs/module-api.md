@@ -26,6 +26,28 @@ Other unsupported characters become `?`.
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
 
+## Markdown Shortcodes
+
+`markdownToEscpos` understands these shortcodes inside paragraphs:
+
+- `{{qr:<payload>|size=<1-16>|ec=<L|M|Q|H>}}` prints a native QR code.
+- `{{row:<left>|<right>|fill=<char>}}` prints a left/right aligned receipt row exactly `charsPerLine` wide (`fill` optional, default space).
+
+```js
+const { markdownToEscpos } = require("@bestimmaa/posprint");
+
+const escpos = markdownToEscpos("{{row:Espresso|2.50}}\n{{row:Total|12.00|fill=.}}", { charsPerLine: 42 });
+// Espresso                              2.50
+// Total................................12.00
+```
+
+Row layout rules:
+
+- `fill` must be exactly one character; at least one fill character always separates left and right.
+- Long left text wraps onto preceding lines; right text stays right-aligned on the last line (right text wider than the line wraps onto right-aligned lines).
+- Rows respect list indentation and blockquote prefixes; inline emphasis is printed as plain text; `|` is not allowed inside left or right text.
+- With `strictMarkdown: true`, invalid QR or row shortcodes throw. Otherwise a warning is logged and the shortcode is printed literally.
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:
