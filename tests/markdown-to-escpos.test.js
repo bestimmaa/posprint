@@ -652,3 +652,90 @@ test("keeps strong inline wrapping word-aware with no leading continuation space
   assert.equal(boldOnIndex < boldTextIndex, true);
   assert.equal(boldTextIndex < boldOffIndex, true);
 });
+
+function escposTextLines(bytes) {
+  return Buffer.from(bytes)
+    .toString("latin1")
+    .split("\x1bE\x01").join("")
+    .split("\x1bE\x00").join("")
+    .split("\n");
+}
+
+test("renders table header in bold followed by a dash separator across the table width", () => {
+  const md = "| Item | Price |\n|---|---:|\n| Espresso | 2.50 |";
+  const out = Buffer.from(markdownToEscpos(md, { charsPerLine: 42 }));
+  const headerStart = out.indexOf(Buffer.concat([Buffer.from([0x1b, 0x45, 0x01]), Buffer.from("Item")]));
+  assert.notEqual(headerStart, -1);
+  const boldOff = out.indexOf(Buffer.from([0x1b, 0x45, 0x00]), headerStart);
+  assert.equal(out.subarray(headerStart + 3, boldOff).toString("latin1"), "Item      Price");
+  assert.equal(out.indexOf(Buffer.from("Espresso")) > boldOff, true);
+
+  const lines = escposTextLines(out);
+  const headerIndex = lines.findIndex((value) => value.endsWith("Item      Price"));
+  assert.notEqual(headerIndex, -1);
+  assert.equal(lines[headerIndex + 1], "-".repeat("Item      Price".length));
+  assert.equal(lines[headerIndex + 2], "Espresso   2.50");
+});
+
+test("pads table cells according to left, center, and right alignment", () => {
+  const md = "| Name | Qty | Price |\n|:---|:---:|---:|\n| Tea | 1 | 3.5 |\n| Cappuccino | 12 | 10.25 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 42 }));
+  assert.equal(lines.some((value) => value.endsWith("Name        Qty  Price")), true);
+  assert.equal(lines.includes("Tea          1     3.5"), true);
+  assert.equal(lines.includes("Cappuccino  12   10.25"), true);
+});
+
+test("wraps table cells within their column when the table is wider than charsPerLine", () => {
+  const md = "| Item | Price |\n|---|---:|\n| Almond croissant with extra powdered sugar | 3.20 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 20 }));
+  const bodyStart = lines.findIndex((value) => value.startsWith("Almond"));
+  assert.notEqual(bodyStart, -1);
+  assert.deepEqual(lines.slice(bodyStart, bodyStart + 4), [
+    "Almond          3.20",
+    "croissant with",
+    "extra powdered",
+    "sugar"
+  ]);
+  assert.equal(lines[bodyStart - 1], "-".repeat(20));
+});
+
+test("renders inline emphasis inside table cells as plain text", () => {
+  const md = "| Item | Price |\n|---|---:|\n| **Total** | *12.00* |";
+  const out = Buffer.from(markdownToEscpos(md, { charsPerLine: 42, strictMarkdown: true }));
+  const lines = escposTextLines(out);
+  assert.equal(lines.includes("Total  12.00"), true);
+  assert.equal(out.includes(Buffer.from([0x1b, 0x34, 0x01])), false);
+});
+
+test("table fixture renders right-aligned prices fitted to charsPerLine", () => {
+  const markdown = readFileSync(path.resolve("tests/fixtures/fixture-markdown-table.md"), "utf8");
+  const lines = escposTextLines(markdownToEscpos(markdown, { charsPerLine: 42, strictMarkdown: true }));
+  const espresso = lines.find((value) => value.startsWith("Espresso"));
+  const total = lines.find((value) => value.startsWith("Total"));
+  assert.equal(espresso, "Espresso                          2   5.00");
+  assert.equal(total, "Total                                12.00");
+  assert.equal(lines.includes("powdered sugar"), true);
+  assert.equal(lines.every((value) => value.replace(/[\x00-\x1f]/g, "").length <= 42), true);
+});
+
+test("renders the list marker before a table that starts a list item", () => {
+  const md = "- | a | b |\n  |---|---|\n  | 1 | 2 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 42 }));
+  const markerIndex = lines.findIndex((value) => value.endsWith("- "));
+  assert.notEqual(markerIndex, -1);
+  assert.deepEqual(lines.slice(markerIndex + 1, markerIndex + 4), ["  a  b", "  ----", "  1  2"]);
+});
+
+test("keeps table columns aligned when a cell contains a non-BMP character", () => {
+  const md = "| a | b |\n|---|--:|\n| \u{1F600} x | 1 |\n| e | 2 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 42 }));
+  assert.equal(lines.includes("? x   1"), true);
+  assert.equal(lines.includes("e     2"), true);
+});
+
+test("prints table cells inline when columns cannot fit charsPerLine", () => {
+  const md = "| a | b | c | d | e |\n|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 8 }));
+  const bodyStart = lines.indexOf("-".repeat(8)) + 1;
+  assert.deepEqual(lines.slice(bodyStart, bodyStart + 3), ["1 | 2 |", "3 | 4 |", "5"]);
+});
