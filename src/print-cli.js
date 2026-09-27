@@ -9,7 +9,7 @@ const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = requ
 const { markdownToEscposDetailed } = require("./markdown-to-escpos");
 const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
 const { normalizePrinterUri, getPrinterUriScheme, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
-const { getPrinterStatus, describePrinterStatusProblems } = require("./printer-status");
+const { getPrinterStatus } = require("./printer-status");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -90,27 +90,26 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
   }
 }
 
-const STATUS_TARGET_ERROR =
-  "Printer status is only supported for tcp:// printer URIs. Use --printer-uri=tcp://host[:port].";
-
 function assertStatusTarget(printerUri) {
   if (!printerUri || getPrinterUriScheme(printerUri) !== "tcp") {
-    throw new Error(STATUS_TARGET_ERROR);
+    throw new Error("Printer status is only supported for tcp:// printer URIs. Use --printer-uri=tcp://host[:port].");
   }
 }
 
+function describeStatusProblems(status) {
+  const problems = [status.coverOpen && "cover open", status.paperEnd && "paper end", ...status.errors].filter(Boolean);
+  return problems.length || status.online ? problems : ["offline"];
+}
+
 function formatStatusReport(status) {
-  const problems = describePrinterStatusProblems(status);
-  const lines = [
-    status.ok ? `Status: OK (${status.printerUri})` : `Status: PROBLEM \u2014 ${problems.join(", ")} (${status.printerUri})`
-  ];
+  const summary = status.ok ? "OK" : `PROBLEM \u2014 ${describeStatusProblems(status).join(", ")}`;
+  const lines = [`Status: ${summary} (${status.printerUri})`];
 
   if (status.paperNearEnd && !status.paperEnd) {
     lines.push("Warning: paper near end");
   }
 
   lines.push(`Raw DLE EOT 1-4: ${status.raw.map((b) => `0x${b.toString(16).padStart(2, "0")}`).join(" ")}`);
-
   return lines.join("\n");
 }
 
@@ -263,7 +262,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 
     const status = await getPrinterStatusFn(statusUri);
     log(formatStatusReport(status));
-    return { mode: "status", printerUri: statusUri, status, ok: status.ok, exitCode: status.ok ? 0 : 2 };
+    return { mode: "status", status, exitCode: status.ok ? 0 : 2 };
   }
 
   const dryRun = hasFlag(argv, "--dry-run");
@@ -320,7 +319,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
 
       if (!status.ok) {
         throw new Error(
-          `Printer status check failed for ${printerUri}: ${describePrinterStatusProblems(status).join(", ")}. ` +
+          `Printer status check failed for ${printerUri}: ${describeStatusProblems(status).join(", ")}. ` +
             "Print aborted; nothing was sent."
         );
       }
@@ -350,7 +349,7 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   return { printerName, payloadLength: payload.length, dryRun: false };
 }
 
-module.exports = { main, resolveMarkdownInput, formatHelp, formatStatusReport, validatePlatform, validatePrinterUri };
+module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform, validatePrinterUri };
 
 if (require.main === module) {
   main().then(

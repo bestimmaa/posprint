@@ -94,8 +94,8 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
-- `--status` query the real-time status of a `tcp://` printer and exit, without markdown input. Exit code `0` = OK, `2` = printer reports a problem (cover open, paper end, cutter or other error, offline), `1` = error (for example no answer or a non-`tcp://` target)
-- `--check-status` before printing to a `tcp://` printer, query its status and abort without printing if it is not OK
+- `--status` query the status of a `tcp://` printer and exit (no markdown needed). Exit code `0` = OK, `2` = printer reports a problem (cover open, paper end, error, offline), `1` = error
+- `--check-status` query a `tcp://` printer's status first and abort without printing if it is not OK
 - `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
@@ -112,20 +112,7 @@ Common options:
 
 `tcp://host[:port]` URIs take no path and work on every platform. The job fails if the connection or write makes no progress for 10 seconds.
 
-`--status` and `--check-status` send the ESC/POS real-time status queries `DLE EOT 1`–`4` over the same raw TCP connection and need a `tcp://` printer URI. Local queues (`--printer`), IPP, CUPS, and the Windows spooler don't give bidirectional raw access, so they are rejected with `Printer status is only supported for tcp:// printer URIs`. Example reports:
-
-```text
-Status: OK (tcp://192.168.1.50:9100)
-Warning: paper near end
-Raw DLE EOT 1-4: 0x12 0x12 0x12 0x1e
-```
-
-```text
-Status: PROBLEM — cover open (tcp://192.168.1.50:9100)
-Raw DLE EOT 1-4: 0x1a 0x16 0x12 0x12
-```
-
-Paper near-end is a warning and keeps the status OK. If the printer does not answer within 5 seconds, posprint fails with `Printer did not answer status query ... for host:port`.
+`--status` and `--check-status` send the ESC/POS real-time status queries `DLE EOT 1`–`4` and need a `tcp://` printer URI; local queues, IPP, CUPS, and the Windows spooler are rejected. Paper near-end is a warning and keeps the status OK. The query fails if the printer does not answer within 5 seconds.
 
 Printer selection order:
 
