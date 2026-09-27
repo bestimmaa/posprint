@@ -523,3 +523,108 @@ test("main prints via printer-uri on win32 and skips listPrinters", async () => 
   assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(typeof uriCall.bytes, "number");
 });
+
+const STATUS_OK = { printerUri: "tcp://10.0.0.5:9100", ok: true, online: true, coverOpen: false, paperEnd: false, paperNearEnd: false, errors: [], raw: [0x12, 0x12, 0x12, 0x12] };
+const STATUS_COVER_OPEN = { ...STATUS_OK, ok: false, online: false, coverOpen: true, raw: [0x1a, 0x16, 0x12, 0x12] };
+
+// Spawns the CLI with stdin left open, so a stray stdin read hangs until the 5s kill and fails the test.
+function runCli(args) {
+  const { spawn } = require("node:child_process");
+  const child = spawn(process.execPath, [path.resolve(__dirname, "..", "src", "print-cli.js"), ...args], { timeout: 5000 });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += d));
+  child.stderr.on("data", (d) => (stderr += d));
+  return new Promise((resolve) => child.on("close", (code) => resolve({ code, stdout, stderr })));
+}
+
+test("main --status reports status and exit code without markdown input", async () => {
+  const lines = [];
+  const deps = { log: (line) => lines.push(line), getPrinterStatus: async () => ({ ...STATUS_OK, paperNearEnd: true }) };
+
+  const ok = await main(["--status", "--printer-uri=tcp://10.0.0.5"], deps);
+  assert.equal(ok.exitCode, 0);
+  assert.equal(lines.join("\n"), "Status: OK (tcp://10.0.0.5:9100)\nWarning: paper near end\nRaw DLE EOT 1-4: 0x12 0x12 0x12 0x12");
+
+  deps.getPrinterStatus = async () => ({ ...STATUS_COVER_OPEN, paperEnd: true, errors: ["autocutter error"] });
+  const bad = await main(["--status", "--printer-uri=tcp://10.0.0.5"], deps);
+  assert.equal(bad.exitCode, 2);
+  assert.match(lines.at(-1), /^Status: PROBLEM — cover open, paper end, autocutter error \(tcp:\/\/10\.0\.0\.5:9100\)/m);
+});
+
+test("main --status and --check-status reject non-tcp targets", async () => {
+  const deps = {
+    getPrinterStatus: async () => assert.fail("must not query"),
+    printRaw: async () => assert.fail("must not print"),
+    printRawToPrinterUri: async () => assert.fail("must not print")
+  };
+
+  for (const argv of [
+    ["--status"],
+    ["--status", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"],
+    ["--markdown=# hi", "--check-status", "--printer=EPSON"],
+    ["--markdown=# hi", "--check-status", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"]
+  ]) {
+    await assert.rejects(() => main(argv, deps), /status is only supported for tcp:\/\/ printer URIs/, argv.join(" "));
+  }
+});
+
+test("posprint --status exits 0 when OK, 2 on problem, 1 on error, without reading stdin", async () => {
+  const net = require("node:net");
+  const startPrinter = async (bytes) => {
+    const server = net.createServer((socket) => socket.once("data", () => socket.write(Buffer.from(bytes))));
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    return server;
+  };
+  const okPrinter = await startPrinter(STATUS_OK.raw);
+  const badPrinter = await startPrinter(STATUS_COVER_OPEN.raw);
+
+  try {
+    const ok = await runCli(["--status", `--printer-uri=tcp://127.0.0.1:${okPrinter.address().port}`]);
+    assert.equal(ok.code, 0, ok.stderr);
+    assert.match(ok.stdout, /Status: OK/);
+
+    const bad = await runCli(["--status", `--printer-uri=tcp://127.0.0.1:${badPrinter.address().port}`]);
+    assert.equal(bad.code, 2, bad.stderr);
+    assert.match(bad.stdout, /Status: PROBLEM — cover open/);
+
+    const error = await runCli(["--status", "--printer-uri=tcp://127.0.0.1:1"]);
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /TCP connection failed for 127\.0\.0\.1:1/);
+  } finally {
+    okPrinter.close();
+    badPrinter.close();
+  }
+});
+
+test("main --check-status queries status before printing and aborts on problems", async () => {
+  const calls = [];
+  const warnings = [];
+  const deps = {
+    platform: () => "linux",
+    warn: (message) => warnings.push(message),
+    getPrinterStatus: async (uri) => {
+      calls.push(`status ${uri}`);
+      return STATUS_COVER_OPEN;
+    },
+    printRawToPrinterUri: async (uri) => calls.push(`print ${uri}`)
+  };
+  const argv = ["--markdown=# hi", "--printer-uri=tcp://10.0.0.5", "--check-status"];
+
+  await assert.rejects(() => main(argv, deps), /Printer status check failed for tcp:\/\/10\.0\.0\.5:9100: cover open\. Print aborted/);
+  assert.deepEqual(calls, ["status tcp://10.0.0.5:9100"]);
+
+  deps.getPrinterStatus = async (uri) => {
+    calls.push(`status ${uri}`);
+    return { ...STATUS_OK, paperNearEnd: true };
+  };
+  calls.length = 0;
+  await main(argv, deps);
+  assert.deepEqual(calls, ["status tcp://10.0.0.5:9100", "print tcp://10.0.0.5:9100"]);
+  assert.match(warnings.join("\n"), /paper near end/);
+});
+
+test("main --check-status is skipped in dry-run", async () => {
+  const result = await main(["--markdown=# hi", "--check-status", "--dry-run"], { getPrinterStatus: async () => assert.fail("must not query") });
+  assert.equal(result.dryRun, true);
+});

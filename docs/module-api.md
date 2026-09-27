@@ -6,6 +6,7 @@ Exports:
 
 - `markdownToEscpos`
 - `previewEscpos`
+- `getPrinterStatus`
 - `listPrinters`
 - `printRaw`
 - `printRawToPrinterUri`
@@ -116,6 +117,39 @@ printToNetworkPrinter().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });
+```
+
+## CommonJS Printer Status
+
+`getPrinterStatus(printerUri, { timeoutMs = 5000 })` queries a network ESC/POS printer over `tcp://host[:port]` with the real-time status commands `DLE EOT 1`–`4` and resolves with:
+
+```js
+{
+  printerUri: "tcp://192.168.1.50:9100",
+  ok: true,              // online, cover closed, paper present, no errors
+  online: true,
+  coverOpen: false,
+  paperEnd: false,
+  paperNearEnd: false,   // warning only, does not affect ok
+  errors: [],            // e.g. ["autocutter error"]
+  raw: [0x12, 0x12, 0x12, 0x12] // DLE EOT 1..4 response bytes
+}
+```
+
+It rejects when the connection fails, the printer closes the connection or doesn't answer within `timeoutMs`, or a response byte isn't a valid `DLE EOT` answer. Non-`tcp://` or malformed URIs throw the same `UNSUPPORTED_SCHEME` / `INVALID_URI` errors as `printRawToPrinterUri`.
+
+```js
+const { markdownToEscpos, getPrinterStatus, printRawToPrinterUri } = require("@bestimmaa/posprint");
+
+async function printIfReady(printerUri) {
+  const status = await getPrinterStatus(printerUri);
+
+  if (!status.ok) {
+    throw new Error(`Printer not ready: ${JSON.stringify(status)}`);
+  }
+
+  await printRawToPrinterUri(printerUri, Buffer.from(markdownToEscpos("# Ready")));
+}
 ```
 
 ## CommonJS Conversion Only

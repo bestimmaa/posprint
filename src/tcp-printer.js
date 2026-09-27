@@ -9,6 +9,11 @@ function formatEndpoint(host, port) {
   return host.includes(":") ? `[${host}]:${port}` : `${host}:${port}`;
 }
 
+function tcpConnectionError(endpoint, error) {
+  // Multi-address hosts fail with an AggregateError whose message is empty; its code is not.
+  return new Error(`TCP connection failed for ${endpoint}: ${error.message || error.code}`);
+}
+
 /**
  * Send a raw payload to a network printer over TCP (JetDirect/AppSocket, default port 9100).
  *
@@ -47,8 +52,7 @@ async function printRawToTcpPrinter(
       socket.destroy();
     });
     socket.on("error", (error) => {
-      // Multi-address hosts fail with an AggregateError whose message is empty; its code is not.
-      failure = failure || new Error(`TCP connection failed for ${endpoint}: ${error.message || error.code}`);
+      failure = failure || tcpConnectionError(endpoint, error);
     });
     // "close" fires exactly once, after any "error".
     socket.on("close", () => (failure ? reject(failure) : resolve()));
@@ -66,5 +70,7 @@ async function printRawToTcpPrinter(
 
 module.exports = {
   DEFAULT_TCP_TIMEOUT_MS,
-  printRawToTcpPrinter
+  formatEndpoint,
+  printRawToTcpPrinter,
+  tcpConnectionError
 };

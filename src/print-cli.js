@@ -9,7 +9,8 @@ const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = requ
 const { markdownToEscposDetailed } = require("./markdown-to-escpos");
 const { previewEscpos } = require("./escpos-preview");
 const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
-const { normalizePrinterUri, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
+const { normalizePrinterUri, getPrinterUriScheme, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
+const { getPrinterStatus } = require("./printer-status");
 const pkg = require("../package.json");
 
 function formatHelp() {
@@ -33,6 +34,9 @@ function formatHelp() {
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
     "  --preview                Show a text preview of the payload (implies --dry-run)",
+    "  --status                 Query printer status over --printer-uri=tcp://... and exit",
+    "                           (exit code 0 = OK, 2 = printer reports a problem, 1 = error)",
+    "  --check-status           Query tcp:// printer status before printing; abort if not OK",
     "  --help                   Show help",
     "  --version                Show version",
     "",
@@ -86,6 +90,29 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
 
     throw error;
   }
+}
+
+function assertStatusTarget(printerUri) {
+  if (!printerUri || getPrinterUriScheme(printerUri) !== "tcp") {
+    throw new Error("Printer status is only supported for tcp:// printer URIs. Use --printer-uri=tcp://host[:port].");
+  }
+}
+
+function describeStatusProblems(status) {
+  const problems = [status.coverOpen && "cover open", status.paperEnd && "paper end", ...status.errors].filter(Boolean);
+  return problems.length || status.online ? problems : ["offline"];
+}
+
+function formatStatusReport(status) {
+  const summary = status.ok ? "OK" : `PROBLEM \u2014 ${describeStatusProblems(status).join(", ")}`;
+  const lines = [`Status: ${summary} (${status.printerUri})`];
+
+  if (status.paperNearEnd && !status.paperEnd) {
+    lines.push("Warning: paper near end");
+  }
+
+  lines.push(`Raw DLE EOT 1-4: ${status.raw.map((b) => `0x${b.toString(16).padStart(2, "0")}`).join(" ")}`);
+  return lines.join("\n");
 }
 
 function parseOptionalMmArg(argv, flag, { min, exclusiveMin = false }) {
@@ -228,8 +255,21 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     return { mode: "list-code-pages", codePages: getSupportedCodePages() };
   }
 
+  const warn = deps.warn || ((message) => console.warn(message));
+  const getPrinterStatusFn = deps.getPrinterStatus || getPrinterStatus;
+
+  if (hasFlag(argv, "--status")) {
+    const statusUri = validatePrinterUri(getArgValue(argv, "--printer-uri"), { warn });
+    assertStatusTarget(statusUri);
+
+    const status = await getPrinterStatusFn(statusUri);
+    log(formatStatusReport(status));
+    return { mode: "status", status, exitCode: status.ok ? 0 : 2 };
+  }
+
   const preview = hasFlag(argv, "--preview");
   const dryRun = preview || hasFlag(argv, "--dry-run");
+  const checkStatus = hasFlag(argv, "--check-status");
   const strictMarkdown = hasFlag(argv, "--strict-markdown");
   const charsPerLineRaw = getArgValue(argv, "--chars-per-line") || "42";
 
@@ -249,8 +289,12 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const printRawToPrinterUriFn = deps.printRawToPrinterUri || printRawToPrinterUri;
   const markdownToEscposDetailedFn = deps.markdownToEscposDetailed || markdownToEscposDetailed;
   const printerUriRaw = getArgValue(argv, "--printer-uri");
-  const warn = deps.warn || ((message) => console.warn(message));
   const printerUri = validatePrinterUri(printerUriRaw, { warn });
+
+  if (checkStatus && !dryRun) {
+    assertStatusTarget(printerUri);
+  }
+
   const layoutOptions = parseLayoutOptions(argv);
   const codePage = parseCodePageOption(argv);
 
@@ -282,6 +326,21 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   validatePlatform(platform());
 
   if (printerUri) {
+    if (checkStatus) {
+      const status = await getPrinterStatusFn(printerUri);
+
+      if (!status.ok) {
+        throw new Error(
+          `Printer status check failed for ${printerUri}: ${describeStatusProblems(status).join(", ")}. ` +
+            "Print aborted; nothing was sent."
+        );
+      }
+
+      if (status.paperNearEnd) {
+        warn(`Printer at ${printerUri} reports paper near end.`);
+      }
+    }
+
     await printRawToPrinterUriFn(printerUri, payload);
     return { printerName: null, printerUri, payloadLength: payload.length, dryRun: false };
   }
@@ -307,6 +366,11 @@ module.exports = { main, resolveMarkdownInput, formatHelp, validatePlatform, val
 if (require.main === module) {
   main().then(
     (result) => {
+      if (result.mode === "status") {
+        process.exitCode = result.exitCode;
+        return;
+      }
+
       if (result.mode === "help" || result.mode === "version" || result.mode === "list-code-pages") {
         return;
       }

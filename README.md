@@ -19,6 +19,7 @@
 - Dry-run output before sending a real print job
 - Preview the receipt layout as text without spending paper
 - Print to a local printer queue, a direct IPP/IPPS printer URI, or a network printer over raw TCP (`tcp://`, port 9100)
+- Query a network printer's real-time status (cover open, paper end/near end, cutter errors) over `tcp://`
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
 
 ## Install
@@ -80,6 +81,13 @@ Print straight to a network printer over raw TCP (JetDirect/AppSocket), no CUPS 
 posprint --markdown-file="./receipt.md" --printer-uri="tcp://192.168.1.50:9100"
 ```
 
+Check a network printer's status (cover, paper, errors) before printing:
+
+```bash
+posprint --status --printer-uri="tcp://192.168.1.50"
+# Status: OK (tcp://192.168.1.50:9100)
+```
+
 ## CLI
 
 ```text
@@ -94,6 +102,8 @@ Common options:
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
 - `--preview` print a framed plain-text preview of the ESC/POS payload to stdout (implies `--dry-run`)
+- `--status` query the status of a `tcp://` printer and exit (no markdown needed). Exit code `0` = OK, `2` = printer reports a problem (cover open, paper end, error, offline), `1` = error
+- `--check-status` query a `tcp://` printer's status first and abort without printing if it is not OK
 - `--strict-markdown` reject unsupported constructs and invalid QR/row shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
@@ -109,6 +119,8 @@ Common options:
 `http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning.
 
 `tcp://host[:port]` URIs take no path and work on every platform. The job fails if the connection or write makes no progress for 10 seconds.
+
+`--status` and `--check-status` send the ESC/POS real-time status queries `DLE EOT 1`–`4` and need a `tcp://` printer URI; local queues, IPP, CUPS, and the Windows spooler are rejected. Paper near-end is a warning and keeps the status OK. The query fails if the printer does not answer within 5 seconds.
 
 Printer selection order:
 
