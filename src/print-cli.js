@@ -79,14 +79,6 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
       throw new Error("Unsupported --printer-uri scheme. Use ipp://, ipps://, or tcp://.");
     }
 
-    if (error && error.code === PRINTER_URI_ERROR_CODES.INVALID_PORT) {
-      throw new Error("Invalid --printer-uri port. Use tcp://host:port with a port between 1 and 65535 (default: 9100).");
-    }
-
-    if (error && error.code === PRINTER_URI_ERROR_CODES.UNSUPPORTED_PATH && /^tcp:/i.test(String(printerUri))) {
-      throw new Error("Unsupported --printer-uri value. tcp:// URIs take no path: use tcp://host[:port].");
-    }
-
     throw error;
   }
 }

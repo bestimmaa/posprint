@@ -93,7 +93,7 @@ Common options:
 
 `http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning.
 
-`tcp://` URIs take only a host and optional port (no path) and work on Windows, Linux, and macOS. Most network ESC/POS printers, including the TM-T88V with an Ethernet interface, accept raw jobs on port `9100`. The connection times out after 10 seconds without progress, and the error names the `host:port`.
+`tcp://host[:port]` URIs take no path and work on every platform. The job fails if the connection or write makes no progress for 10 seconds.
 
 Printer selection order:
 

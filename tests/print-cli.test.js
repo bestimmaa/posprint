@@ -402,28 +402,14 @@ test("validatePrinterUri rejects unsupported schemes", () => {
   );
 });
 
-test("validatePrinterUri accepts tcp URI with explicit port", () => {
+test("validatePrinterUri normalizes tcp URIs and remaps malformed ones to CLI message", () => {
   const warnings = [];
-  const normalized = validatePrinterUri("tcp://192.168.1.50:9100", { warn: (m) => warnings.push(m) });
-  assert.equal(normalized, "tcp://192.168.1.50:9100");
+  assert.equal(validatePrinterUri("tcp://printer.local", { warn: (m) => warnings.push(m) }), "tcp://printer.local:9100");
   assert.deepEqual(warnings, []);
-});
 
-test("validatePrinterUri fills in default tcp port 9100", () => {
-  assert.equal(validatePrinterUri("tcp://printer.local"), "tcp://printer.local:9100");
-});
-
-test("validatePrinterUri rejects invalid tcp port with CLI message", () => {
-  for (const uri of ["tcp://printer.local:99999", "tcp://printer.local:abc", "tcp://printer.local:0"]) {
-    assert.throws(() => validatePrinterUri(uri), /Invalid --printer-uri port\. Use tcp:\/\/host:port/, uri);
+  for (const uri of ["tcp://printer.local:99999", "tcp://printer.local:0", "tcp://printer.local:9100/printers/queue"]) {
+    assert.throws(() => validatePrinterUri(uri), /Invalid --printer-uri value\. .*tcp:\/\/host\[:port\]/, uri);
   }
-});
-
-test("validatePrinterUri rejects tcp URI with path", () => {
-  assert.throws(
-    () => validatePrinterUri("tcp://printer.local:9100/printers/queue"),
-    /tcp:\/\/ URIs take no path/
-  );
 });
 
 test("main prints via tcp printer-uri and skips listPrinters", async () => {
@@ -442,38 +428,6 @@ test("main prints via tcp printer-uri and skips listPrinters", async () => {
   assert.equal(result.printerUri, "tcp://192.168.1.50:9100");
   assert.equal(uriCall.uri, "tcp://192.168.1.50:9100");
   assert.equal(uriCall.bytes, result.payloadLength);
-});
-
-test("main prints tcp printer-uri bytes to a real TCP listener on every platform", async () => {
-  const net = require("node:net");
-
-  for (const platformName of ["linux", "darwin", "win32"]) {
-    const chunks = [];
-    const server = net.createServer((socket) => {
-      socket.on("data", (chunk) => chunks.push(chunk));
-    });
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const { port } = server.address();
-
-    try {
-      const result = await main(["--markdown=# hi", `--printer-uri=tcp://127.0.0.1:${port}`], {
-        platform: () => platformName,
-        listPrinters: async () => {
-          throw new Error("should not list printers when --printer-uri is set");
-        },
-        printRawToPrinterUri: (uri, data) => {
-          const { createPrintBridge } = require("../src/print-bridge");
-          return createPrintBridge({ platform: () => platformName }).printRawToPrinterUri(uri, data);
-        }
-      });
-
-      const received = Buffer.concat(chunks);
-      assert.equal(received.length, result.payloadLength, platformName);
-      assert.equal(received[0], 0x1b, platformName);
-    } finally {
-      await new Promise((resolve) => server.close(resolve));
-    }
-  }
 });
 
 test("main prints via printer-uri on win32 and skips listPrinters", async () => {

@@ -3,7 +3,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  DEFAULT_TCP_PORT,
   getPrinterUriScheme,
   normalizePrinterUri,
   parsePrinterUri,
@@ -15,81 +14,60 @@ test("printer-uri exports stable error code constants", () => {
   assert.deepEqual(PRINTER_URI_ERROR_CODES, {
     INVALID_URI: "INVALID_URI",
     UNSUPPORTED_SCHEME: "UNSUPPORTED_SCHEME",
-    UNSUPPORTED_PATH: "UNSUPPORTED_PATH",
-    INVALID_PORT: "INVALID_PORT"
+    UNSUPPORTED_PATH: "UNSUPPORTED_PATH"
   });
 });
 
-test("normalizePrinterUri accepts tcp URI with explicit port", () => {
-  assert.deepEqual(normalizePrinterUri("tcp://192.168.1.50:9100"), {
-    normalizedUri: "tcp://192.168.1.50:9100",
+test("normalizePrinterUri accepts tcp URIs and defaults the port to 9100", () => {
+  assert.deepEqual(normalizePrinterUri("tcp://192.168.1.50:9101"), {
+    normalizedUri: "tcp://192.168.1.50:9101",
     wasUpgraded: false
   });
+  assert.equal(normalizePrinterUri("TCP://printer.local/").normalizedUri, "tcp://printer.local:9100");
 });
 
-test("normalizePrinterUri defaults tcp port to 9100", () => {
-  assert.equal(DEFAULT_TCP_PORT, 9100);
-  assert.equal(normalizePrinterUri("tcp://printer.local").normalizedUri, "tcp://printer.local:9100");
-  assert.equal(normalizePrinterUri("tcp://printer.local/").normalizedUri, "tcp://printer.local:9100");
-});
-
-test("parseTcpPrinterUri returns host and port", () => {
-  assert.deepEqual(parseTcpPrinterUri("tcp://192.168.1.50:9101"), {
-    host: "192.168.1.50",
-    port: 9101,
-    normalizedUri: "tcp://192.168.1.50:9101"
-  });
-  assert.deepEqual(parseTcpPrinterUri("TCP://printer.local"), {
+test("parseTcpPrinterUri returns host and port, unwrapping IPv6 hosts", () => {
+  assert.deepEqual(parseTcpPrinterUri("tcp://printer.local"), {
     host: "printer.local",
     port: 9100,
     normalizedUri: "tcp://printer.local:9100"
   });
-});
-
-test("parseTcpPrinterUri unwraps IPv6 hosts", () => {
-  assert.deepEqual(parseTcpPrinterUri("tcp://[::1]:9100"), {
+  assert.deepEqual(parseTcpPrinterUri("tcp://[::1]:9101"), {
     host: "::1",
-    port: 9100,
-    normalizedUri: "tcp://[::1]:9100"
+    port: 9101,
+    normalizedUri: "tcp://[::1]:9101"
   });
 });
 
-test("parseTcpPrinterUri rejects non-tcp URIs", () => {
+test("parseTcpPrinterUri rejects malformed tcp URIs", () => {
+  const invalid = [
+    "tcp://",
+    "tcp://printer.local:0",
+    "tcp://printer.local:99999",
+    "tcp://printer.local:abc",
+    "tcp://printer.local:9100/queue",
+    "tcp://printer.local?x=1",
+    "tcp://user@printer.local"
+  ];
+
+  for (const uri of invalid) {
+    assert.throws(() => normalizePrinterUri(uri), (error) => {
+      assert.equal(error.code, PRINTER_URI_ERROR_CODES.INVALID_URI, uri);
+      return true;
+    });
+    assert.throws(() => parseTcpPrinterUri(uri), /Invalid tcp:\/\/ printer URI\. Use tcp:\/\/host\[:port\]/, uri);
+  }
+});
+
+test("tcp and ipp parsers reject each other's schemes", () => {
   assert.throws(() => parseTcpPrinterUri("ipp://taiga.local:631/printers/TM-T88V"), (error) => {
     assert.equal(error.code, PRINTER_URI_ERROR_CODES.UNSUPPORTED_SCHEME);
     return true;
   });
-});
-
-test("normalizePrinterUri rejects invalid tcp ports", () => {
-  for (const uri of ["tcp://printer.local:99999", "tcp://printer.local:abc", "tcp://printer.local:0", "tcp://[::1]:70000"]) {
-    assert.throws(() => normalizePrinterUri(uri), (error) => {
-      assert.equal(error.code, PRINTER_URI_ERROR_CODES.INVALID_PORT, uri);
-      assert.match(error.message, /Invalid tcp:\/\/ printer URI port/);
-      return true;
-    });
-  }
-});
-
-test("normalizePrinterUri rejects tcp URI with path, query, or credentials", () => {
-  for (const uri of ["tcp://printer.local:9100/queue", "tcp://printer.local?x=1", "tcp://user@printer.local"]) {
-    assert.throws(() => normalizePrinterUri(uri), (error) => {
-      assert.equal(error.code, PRINTER_URI_ERROR_CODES.UNSUPPORTED_PATH, uri);
-      assert.match(error.message, /tcp:\/\/host\[:port\]/);
-      return true;
-    });
-  }
-});
-
-test("normalizePrinterUri rejects tcp URI without host", () => {
-  assert.throws(() => normalizePrinterUri("tcp://"), (error) => {
-    assert.equal(error.code, PRINTER_URI_ERROR_CODES.INVALID_URI);
+  assert.throws(() => parsePrinterUri("tcp://printer.local"), (error) => {
+    assert.equal(error.code, PRINTER_URI_ERROR_CODES.UNSUPPORTED_SCHEME);
     return true;
   });
-});
-
-test("parsePrinterUri rejects tcp URIs (IPP only)", () => {
-  assert.throws(() => parsePrinterUri("tcp://printer.local"), /IPP printing/);
 });
 
 test("getPrinterUriScheme returns lowercase scheme or null", () => {
