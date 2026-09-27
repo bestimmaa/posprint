@@ -7,6 +7,7 @@ const { text } = require("stream/consumers");
 const { getArgValue, hasFlag } = require("./cli-common");
 const { listPrinters, printRaw, printRawToPrinterUri, selectPrinterName } = require("./index");
 const { markdownToEscposDetailed } = require("./markdown-to-escpos");
+const { previewEscpos } = require("./escpos-preview");
 const { resolveCodePage, getSupportedCodePages } = require("./text-transcoder");
 const { normalizePrinterUri, getPrinterUriScheme, PRINTER_URI_ERROR_CODES } = require("./printer-uri");
 const { getPrinterStatus } = require("./printer-status");
@@ -32,6 +33,7 @@ function formatHelp() {
     "  --list-code-pages       Print supported code pages with ids and names",
     "  --strict-markdown        Reject unsupported constructs",
     "  --dry-run                Build payload without printing",
+    "  --preview                Show a text preview of the payload (implies --dry-run)",
     "  --status                 Query printer status over --printer-uri=tcp://... and exit",
     "                           (exit code 0 = OK, 2 = printer reports a problem, 1 = error)",
     "  --check-status           Query tcp:// printer status before printing; abort if not OK",
@@ -265,7 +267,8 @@ async function main(argv = process.argv.slice(2), deps = {}) {
     return { mode: "status", status, exitCode: status.ok ? 0 : 2 };
   }
 
-  const dryRun = hasFlag(argv, "--dry-run");
+  const preview = hasFlag(argv, "--preview");
+  const dryRun = preview || hasFlag(argv, "--dry-run");
   const checkStatus = hasFlag(argv, "--check-status");
   const strictMarkdown = hasFlag(argv, "--strict-markdown");
   const charsPerLineRaw = getArgValue(argv, "--chars-per-line") || "42";
@@ -306,6 +309,15 @@ async function main(argv = process.argv.slice(2), deps = {}) {
   const payload = Buffer.from(detailedResult.bytes);
 
   warnOnFallbackReplacements(detailedResult.replacements, codePage, warn);
+
+  if (preview) {
+    const previewEscposFn = deps.previewEscpos || previewEscpos;
+    const isTTY = deps.isTTY != null ? deps.isTTY : Boolean(process.stdout.isTTY);
+    const ansi = isTTY && !process.env.NO_COLOR;
+    const previewText = previewEscposFn(payload, { charsPerLine, ansi });
+    log(previewText);
+    return { printerName: null, payloadLength: payload.length, dryRun: true, preview: previewText };
+  }
 
   if (dryRun) {
     return { printerName: null, payloadLength: payload.length, dryRun: true };
@@ -360,6 +372,10 @@ if (require.main === module) {
       }
 
       if (result.mode === "help" || result.mode === "version" || result.mode === "list-code-pages") {
+        return;
+      }
+
+      if (result.preview != null) {
         return;
       }
 

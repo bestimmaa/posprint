@@ -222,6 +222,123 @@ test("best-effort mode warns and prints invalid qr shortcode literally", () => {
   }
 });
 
+function encodedRowLine(value, codePage = "cp858") {
+  return Buffer.concat([Buffer.from(textTranscoder.encodeText(value, { codePage })), Buffer.from([0x0a])]);
+}
+
+function assertHasLine(out, value, codePage = "cp858") {
+  assert.notEqual(out.indexOf(encodedRowLine(value, codePage)), -1, `missing line: ${JSON.stringify(value)}`);
+}
+
+test("renders row shortcode as left/right aligned line at charsPerLine", () => {
+  const out = Buffer.from(markdownToEscpos("{{row:Espresso|2.50}}", { charsPerLine: 42 }));
+  const expected = `Espresso${" ".repeat(30)}2.50`;
+
+  assert.equal(expected.length, 42);
+  assertHasLine(out, expected);
+  assert.equal(out.includes(Buffer.from("{{row:")), false);
+});
+
+test("row shortcode keeps a single fill char when left and right fill the width exactly", () => {
+  const out = Buffer.from(markdownToEscpos("{{row:ABCDE|12345|fill=.}}", { charsPerLine: 11 }));
+  assertHasLine(out, "ABCDE.12345");
+});
+
+test("row shortcode wraps long left text and keeps only the words that fit beside the right text", () => {
+  const out = Buffer.from(markdownToEscpos("{{row:Croissant au beurre with almond cream|3.20}}", { charsPerLine: 24 }));
+
+  assertHasLine(out, "Croissant au beurre with");
+  assertHasLine(out, `almond cream${" ".repeat(8)}3.20`);
+});
+
+test("row shortcode wraps right text onto right-aligned lines when it exceeds the width", () => {
+  const out = Buffer.from(markdownToEscpos("{{row:Item|12345678901234}}", { charsPerLine: 10 }));
+
+  assertHasLine(out, "Item");
+  assertHasLine(out, "1234567890");
+  assertHasLine(out, `${" ".repeat(6)}1234`);
+});
+
+test("renders several row shortcodes in one paragraph as separate lines", () => {
+  const markdown = "Order\n{{row:Espresso|2.50}}\n{{row:Croissant|3.20}}\nThanks";
+  const out = Buffer.from(markdownToEscpos(markdown, { charsPerLine: 20 }));
+  const expected = Buffer.concat([
+    encodedRowLine("Order"),
+    encodedRowLine(`Espresso${" ".repeat(8)}2.50`),
+    encodedRowLine(`Croissant${" ".repeat(7)}3.20`),
+    encodedRowLine("Thanks")
+  ]);
+
+  assert.notEqual(out.indexOf(expected), -1);
+});
+
+test("row shortcode strips inline emphasis markers", () => {
+  const out = Buffer.from(markdownToEscpos("{{row:**Total**|_12.00_|fill=.}}", { charsPerLine: 20 }));
+  assertHasLine(out, `Total${".".repeat(10)}12.00`);
+  assert.equal(out.includes(Buffer.from("**")), false);
+});
+
+test("row shortcode in list item uses marker and hanging indent within charsPerLine", () => {
+  const markdown = "- {{row:Tea|1.00}}\n- {{row:Oat milk flat white extra|4.90}}";
+  const out = Buffer.from(markdownToEscpos(markdown, { charsPerLine: 20 }));
+
+  assertHasLine(out, `- Tea${" ".repeat(11)}1.00`);
+  assertHasLine(out, "- Oat milk flat");
+  assertHasLine(out, `  white extra${" ".repeat(3)}4.90`);
+});
+
+test("row shortcode in blockquote respects quote prefix", () => {
+  const out = Buffer.from(markdownToEscpos("> {{row:Table|7}}", { charsPerLine: 20 }));
+  assertHasLine(out, `| Table${" ".repeat(12)}7`);
+});
+
+test("row shortcode counts non-ASCII characters once and tracks code page replacements", () => {
+  const { bytes, replacements } = markdownToEscposDetailed("{{row:Gebäck ☕|€ 3.20|fill=.}}", { charsPerLine: 20 });
+
+  assertHasLine(Buffer.from(bytes), `Gebäck ☕${".".repeat(6)}€ 3.20`);
+  assert.deepEqual(replacements.map((entry) => entry.input), ["☕"]);
+});
+
+test("strict mode rejects invalid row shortcodes", () => {
+  for (const markdown of ["{{row:Total|12.00|fill=..}}", "{{row:Total|12.00|fill=}}", "{{row:Total}}", "{{row:A|1|foo=bar}}"]) {
+    assert.throws(
+      () => markdownToEscpos(markdown, { charsPerLine: 42, strictMarkdown: true }),
+      /Invalid row shortcode/,
+      markdown
+    );
+  }
+});
+
+test("best-effort mode warns and prints invalid row shortcode literally", () => {
+  const originalWarn = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.join(" "));
+
+  try {
+    const out = Buffer.from(markdownToEscpos("x {{row:Total|12.00|fill=..}} y", {
+      charsPerLine: 42,
+      strictMarkdown: false
+    }));
+
+    assert.equal(warnings.some((warning) => warning.includes("Invalid row shortcode")), true);
+    assert.equal(out.includes(Buffer.from("x {{row:Total|12.00|fill=..}} y")), true);
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test("row fixture renders every row line at exactly charsPerLine", () => {
+  const fixturePath = path.join(__dirname, "fixtures", "fixture-markdown-row.md");
+  const markdown = readFileSync(fixturePath, "utf8");
+  const out = Buffer.from(markdownToEscpos(markdown, { charsPerLine: 42, strictMarkdown: true }));
+
+  assertHasLine(out, `Espresso${" ".repeat(30)}2.50`);
+  assertHasLine(out, `Total${".".repeat(30)}€ 12.29`);
+  assertHasLine(out, `- Loyalty points${" ".repeat(23)}+12`);
+  assertHasLine(out, `| Table${" ".repeat(34)}7`);
+  assert.equal(out.includes(Buffer.from("{{row:")), false);
+});
+
 test("renders # heading with centered bold extra-large style sequence", () => {
   const out = markdownToEscpos("# Title\n", { charsPerLine: 42, strictMarkdown: false });
   const bytes = Buffer.from(out);
@@ -482,6 +599,23 @@ test("ordered list items are not duplicated", () => {
   assert.equal((text.match(/Espresso/g) || []).length, 1);
   assert.equal((text.match(/Croissant/g) || []).length, 1);
   assert.equal((text.match(/Filter Coffee/g) || []).length, 1);
+});
+
+test("prints tight list items back to back and keeps blank lines in loose lists", () => {
+  const linesOf = (markdown) => Buffer.from(markdownToEscpos(markdown, { charsPerLine: 42 })).toString("utf8").split("\n");
+
+  const tight = linesOf("- Tea\n- Cake\n  - Slice\n- Coffee\n\nAfter\n");
+  const tea = tight.findIndex((line) => line.includes("- Tea"));
+  assert.match(tight[tea + 1], /- Cake/);
+  assert.match(tight[tea + 2], /- Slice/);
+  assert.match(tight[tea + 3], /- Coffee/);
+  assert.equal(tight[tea + 4].replace(/[^\x20-\x7e]/g, "").trim(), "");
+  assert.match(tight[tea + 5], /After/);
+
+  const loose = linesOf("- Tea\n\n- Cake\n");
+  const looseTea = loose.findIndex((line) => line.includes("- Tea"));
+  assert.equal(loose[looseTea + 1].replace(/[^\x20-\x7e]/g, "").trim(), "");
+  assert.match(loose[looseTea + 2], /- Cake/);
 });
 
 test("retains multi-paragraph content within a list item", () => {

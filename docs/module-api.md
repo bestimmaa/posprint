@@ -5,6 +5,7 @@ Package entry point: `require("@bestimmaa/posprint")`
 Exports:
 
 - `markdownToEscpos`
+- `previewEscpos`
 - `getPrinterStatus`
 - `listPrinters`
 - `printRaw`
@@ -26,6 +27,23 @@ Other unsupported characters become `?`.
 
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
+
+## Markdown Shortcodes
+
+`markdownToEscpos` understands these shortcodes inside paragraphs:
+
+- `{{qr:<payload>|size=<1-16>|ec=<L|M|Q|H>}}` prints a native QR code.
+- `{{row:<left>|<right>|fill=<char>}}` prints a left/right aligned receipt row exactly `charsPerLine` wide (`fill` optional, default space).
+
+```js
+const { markdownToEscpos } = require("@bestimmaa/posprint");
+
+const escpos = markdownToEscpos("{{row:Espresso|2.50}}\n{{row:Total|12.00|fill=.}}", { charsPerLine: 42 });
+// Espresso                              2.50
+// Total................................12.00
+```
+
+With `strictMarkdown: true`, invalid QR or row shortcodes throw; otherwise a warning is logged and the shortcode is printed literally. See the README's Receipt rows section for row layout rules.
 
 ## Table Rendering
 
@@ -151,6 +169,31 @@ const escpos = markdownToEscpos("# Dry Run\n\n- Tea\n- Muffin", {
 });
 
 console.log(`ESC/POS payload bytes: ${escpos.length}`);
+```
+
+## Text Preview
+
+`previewEscpos(bytes, options)` interprets an ESC/POS payload and returns a plain-text approximation of the printed receipt, framed by a border as wide as the paper. It decodes the actual bytes rather than re-rendering markdown, so it previews exactly what would be sent.
+
+Options:
+
+- `charsPerLine` line width in characters, default `42`
+- `ansi` render bold, italic, and underline with ANSI escape codes, default `false`
+
+Rendering rules:
+
+- text is decoded with the active code page (`ESC t`)
+- alignment (`ESC a`), left margin (`GS L`), and print area width (`GS W`) are applied by padding
+- double-width text (`GS !`) is spaced out, one extra column per character
+- raster images become `[image <width>x<height>]`, QR codes `[QR: <payload>]`, drawer pulses `[drawer]`
+- cuts become a dashed `✂ cut` line
+- only commands posprint itself emits are interpreted; other ESC/GS commands are skipped
+
+```js
+const { markdownToEscpos, previewEscpos } = require("@bestimmaa/posprint");
+
+const escpos = markdownToEscpos("# Cafe\n\n- Latte 3,50 €", { charsPerLine: 42 });
+console.log(previewEscpos(escpos, { charsPerLine: 42 }));
 ```
 
 ## ESM Interop

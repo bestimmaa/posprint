@@ -17,6 +17,7 @@
 
 - Build receipt payloads from markdown
 - Dry-run output before sending a real print job
+- Preview the receipt layout as text without spending paper
 - Print to a local printer queue, a direct IPP/IPPS printer URI, or a network printer over raw TCP (`tcp://`, port 9100)
 - Query a network printer's real-time status (cover open, paper end/near end, cutter errors) over `tcp://`
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
@@ -47,6 +48,12 @@ Dry run inline markdown without contacting a printer:
 
 ```bash
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant"
+```
+
+Preview the approximate receipt layout in the terminal without printing:
+
+```bash
+posprint --preview --markdown="# Hello\n\n- Espresso\n- Croissant"
 ```
 
 Print to a local queue:
@@ -94,9 +101,10 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
+- `--preview` print a framed plain-text preview of the ESC/POS payload to stdout (implies `--dry-run`)
 - `--status` query the status of a `tcp://` printer and exit (no markdown needed). Exit code `0` = OK, `2` = printer reports a problem (cover open, paper end, error, offline), `1` = error
 - `--check-status` query a `tcp://` printer's status first and abort without printing if it is not OK
-- `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
+- `--strict-markdown` reject unsupported constructs and invalid QR/row shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
 - `--font=A|B|C` select the ESC/POS font
@@ -164,8 +172,29 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 - GFM tables rendered as aligned monospace columns fitted to `charsPerLine` (see [Module API guide](https://github.com/bestimmaa/posprint/blob/main/docs/module-api.md#table-rendering))
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
+- Left/right receipt rows like `{{row:Espresso|2.50}}` or `{{row:Total|12.00|fill=.}}` (see [Receipt rows](#receipt-rows))
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
 - Unicode-to-code-page conversion with `cp858` as the default
+- Text preview (`--preview` / `previewEscpos`) that decodes the actual ESC/POS bytes: alignment, double-width text, code page characters, and placeholders for images, QR codes, drawer pulses, and cuts
+
+### Receipt rows
+
+Use `{{row:<left>|<right>[|fill=<char>]}}` to print a line with left text, fill characters, and right-aligned text spanning exactly `charsPerLine`:
+
+```markdown
+{{row:Espresso|2.50}}
+{{row:Total|12.00|fill=.}}
+```
+
+```text
+Espresso                              2.50
+Total................................12.00
+```
+
+- `fill` must be exactly one character (default: space); at least one fill character separates left and right.
+- Long left text wraps onto preceding lines; the right text stays right-aligned on the last line.
+- Rows respect list markers and blockquote prefixes. Inline emphasis prints as plain text; `|` cannot appear inside left or right text.
+- Invalid row shortcodes fail with `--strict-markdown`; otherwise a warning is printed and the shortcode is printed literally.
 
 Show supported code pages:
 
