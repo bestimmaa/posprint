@@ -5,6 +5,7 @@ Package entry point: `require("@bestimmaa/posprint")`
 Exports:
 
 - `markdownToEscpos`
+- `getPrinterStatus`
 - `listPrinters`
 - `printRaw`
 - `printRawToPrinterUri`
@@ -92,6 +93,64 @@ async function printToNetworkPrinter() {
 }
 
 printToNetworkPrinter().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+```
+
+## CommonJS Printer Status
+
+`getPrinterStatus(printerUri, { timeoutMs })` queries a network ESC/POS printer over a `tcp://host[:port]` URI. It sends the real-time status queries `DLE EOT 1`–`4` (`0x10 0x04 n`) on one connection, reads the four response bytes, and closes the connection. `timeoutMs` defaults to `5000`.
+
+It resolves with:
+
+```js
+{
+  printerUri: "tcp://192.168.1.50:9100",
+  host: "192.168.1.50",
+  port: 9100,
+  ok: true,                  // online && !paperEnd && !coverOpen && no errors
+  online: true,
+  coverOpen: false,
+  paperEnd: false,
+  paperNearEnd: false,       // warning only, does not affect ok
+  paperFeedButton: false,
+  paperFeeding: false,
+  waitingForOnlineRecovery: false,
+  errorOccurred: false,
+  errors: { autocutter: false, unrecoverable: false, autoRecoverable: false },
+  raw: [0x12, 0x12, 0x12, 0x12]  // DLE EOT 1..4 response bytes
+}
+```
+
+It rejects with an `Error` whose `code` is:
+
+- `STATUS_UNSUPPORTED_TARGET` for anything but `tcp://` URIs (`Printer status is only supported for tcp:// printer URIs.`). IPP, CUPS queues, and the Windows spooler don't give bidirectional raw access.
+- `STATUS_TIMEOUT` when the printer doesn't answer in time (`Printer did not answer status query within 5000ms for host:port ...`).
+- `STATUS_CONNECTION_FAILED` or `STATUS_CONNECTION_CLOSED` when the connection fails or closes early.
+- `STATUS_INVALID_RESPONSE` when a response byte doesn't match the fixed DLE EOT bit pattern (bit0 = 0, bit1 = 1, bit4 = 1, bit7 = 0).
+
+Malformed `tcp://` URIs throw the same `INVALID_PORT` / `UNSUPPORTED_PATH` errors as `printRawToPrinterUri`.
+
+```js
+const { markdownToEscpos, getPrinterStatus, printRawToPrinterUri } = require("@bestimmaa/posprint");
+
+async function printIfReady() {
+  const printerUri = "tcp://192.168.1.50";
+  const status = await getPrinterStatus(printerUri, { timeoutMs: 3000 });
+
+  if (!status.ok) {
+    throw new Error(`Printer not ready: ${JSON.stringify(status)}`);
+  }
+
+  if (status.paperNearEnd) {
+    console.warn("Paper is running low.");
+  }
+
+  await printRawToPrinterUri(printerUri, Buffer.from(markdownToEscpos("# Ready\n\n- Espresso")));
+}
+
+printIfReady().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });

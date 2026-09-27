@@ -94,6 +94,13 @@ tcp://192.168.1.50:9100
 ```
 The port can be omitted (`tcp://192.168.1.50`) because it defaults to 9100.
 
+**3. Check the printer status:**
+```sh
+posprint --status --printer-uri="tcp://192.168.1.50"
+```
+This asks the printer for its real-time status (ESC/POS `DLE EOT`) and prints `Status: OK` or `Status: PROBLEM — cover open, paper end`, plus a warning when the paper is near its end. The exit code is `0` when OK, `2` when the printer reports a problem, and `1` on errors. Add `--check-status` to a print command to run this check first and skip the print if the printer isn't ready. Status queries only work over `tcp://`, not through CUPS, IPP, or the Windows spooler.
+
 **Troubleshooting:**
 - `TCP connection failed ... ECONNREFUSED` → wrong port, or raw/port-9100 printing is disabled in the printer's network settings.
 - `TCP print timed out` → wrong IP address, printer offline, or a firewall is dropping traffic to port 9100.
+- `Printer did not answer status query` → the port accepts connections but nothing answers `DLE EOT`: another client may hold the printer's single port-9100 connection, or the device isn't an ESC/POS printer.

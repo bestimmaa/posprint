@@ -496,3 +496,225 @@ test("main prints via printer-uri on win32 and skips listPrinters", async () => 
   assert.equal(uriCall.uri, "ipp://taiga.local:631/printers/TM-T88V");
   assert.equal(typeof uriCall.bytes, "number");
 });
+
+async function startStatusPrinter(responses) {
+  const net = require("node:net");
+  const received = [];
+  const sockets = new Set();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+    socket.on("error", () => {});
+    let buffer = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      received.push(chunk);
+      buffer = Buffer.concat([buffer, chunk]);
+      const answers = [];
+      while (buffer.length >= 3 && buffer[0] === 0x10 && buffer[1] === 0x04) {
+        answers.push(responses[buffer[2] - 1]);
+        buffer = buffer.subarray(3);
+      }
+      if (answers.length) {
+        socket.write(Buffer.from(answers));
+      }
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  return {
+    port,
+    uri: `tcp://127.0.0.1:${port}`,
+    received: () => Buffer.concat(received),
+    close: () =>
+      new Promise((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        server.close(resolve);
+      })
+  };
+}
+
+const STATUS_OK = [0x12, 0x12, 0x12, 0x12];
+const STATUS_COVER_OPEN = [0x1a, 0x16, 0x12, 0x12];
+
+function runCli(args) {
+  const { spawn } = require("node:child_process");
+  const cliPath = path.resolve(__dirname, "..", "src", "print-cli.js");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliPath, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d) => (stdout += d));
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+test("formatHelp documents --status and --check-status", () => {
+  const text = formatHelp();
+  assert.match(text, /--status/);
+  assert.match(text, /--check-status/);
+});
+
+test("main --status reports OK without markdown input", async () => {
+  const printer = await startStatusPrinter(STATUS_OK);
+  const lines = [];
+
+  try {
+    const result = await main(["--status", `--printer-uri=${printer.uri}`], { log: (line) => lines.push(line) });
+    assert.equal(result.mode, "status");
+    assert.equal(result.ok, true);
+    assert.equal(result.exitCode, 0);
+    assert.match(lines.join("\n"), /^Status: OK/);
+  } finally {
+    await printer.close();
+  }
+});
+
+test("main --status reports problems with exit code 2", async () => {
+  const printer = await startStatusPrinter([0x1a, 0x36, 0x12, 0x7e]);
+  const lines = [];
+
+  try {
+    const result = await main(["--status", `--printer-uri=${printer.uri}`], { log: (line) => lines.push(line) });
+    assert.equal(result.ok, false);
+    assert.equal(result.exitCode, 2);
+    assert.match(lines.join("\n"), /Status: PROBLEM — cover open, paper end/);
+  } finally {
+    await printer.close();
+  }
+});
+
+test("main --status prints paper near-end warning while OK", async () => {
+  const printer = await startStatusPrinter([0x12, 0x12, 0x12, 0x1e]);
+  const lines = [];
+
+  try {
+    const result = await main(["--status", `--printer-uri=${printer.uri}`], { log: (line) => lines.push(line) });
+    assert.equal(result.exitCode, 0);
+    assert.match(lines.join("\n"), /Status: OK[\s\S]*Warning: paper near end/);
+  } finally {
+    await printer.close();
+  }
+});
+
+test("main --status rejects non-tcp targets", async () => {
+  const getPrinterStatus = async () => {
+    throw new Error("must not query");
+  };
+
+  for (const argv of [
+    ["--status"],
+    ["--status", "--printer=EPSON TM-T88V"],
+    ["--status", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"]
+  ]) {
+    await assert.rejects(
+      () => main(argv, { getPrinterStatus, log: () => {} }),
+      /status is only supported for tcp:\/\/ printer URIs/,
+      argv.join(" ")
+    );
+  }
+});
+
+test("posprint --status exits 0 when OK, 2 on problem, 1 on error", async () => {
+  const okPrinter = await startStatusPrinter(STATUS_OK);
+  const badPrinter = await startStatusPrinter(STATUS_COVER_OPEN);
+
+  try {
+    const ok = await runCli(["--status", `--printer-uri=${okPrinter.uri}`]);
+    assert.equal(ok.code, 0, ok.stderr);
+    assert.match(ok.stdout, /Status: OK/);
+
+    const bad = await runCli(["--status", `--printer-uri=${badPrinter.uri}`]);
+    assert.equal(bad.code, 2, bad.stderr);
+    assert.match(bad.stdout, /Status: PROBLEM — cover open/);
+
+    const error = await runCli(["--status", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"]);
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /status is only supported for tcp:\/\/ printer URIs/);
+  } finally {
+    await okPrinter.close();
+    await badPrinter.close();
+  }
+});
+
+test("main --check-status aborts printing when printer reports a problem", async () => {
+  const printer = await startStatusPrinter(STATUS_COVER_OPEN);
+  let printed = false;
+
+  try {
+    await assert.rejects(
+      () =>
+        main(["--markdown=# hi", `--printer-uri=${printer.uri}`, "--check-status"], {
+          platform: () => "linux",
+          printRawToPrinterUri: async () => {
+            printed = true;
+          }
+        }),
+      /Printer status check failed for tcp:\/\/127\.0\.0\.1:\d+: cover open\. Print aborted/
+    );
+    assert.equal(printed, false);
+    // Only the status query reached the printer.
+    assert.deepEqual([...printer.received()], [0x10, 4, 1, 0x10, 4, 2, 0x10, 4, 3, 0x10, 4, 4]);
+  } finally {
+    await printer.close();
+  }
+});
+
+test("main --check-status prints when printer is OK", async () => {
+  const printer = await startStatusPrinter([0x12, 0x12, 0x12, 0x1e]);
+  const warnings = [];
+  let uriCall = null;
+
+  try {
+    const result = await main(["--markdown=# hi", `--printer-uri=${printer.uri}`, "--check-status"], {
+      platform: () => "linux",
+      warn: (message) => warnings.push(message),
+      printRawToPrinterUri: async (uri, data) => {
+        uriCall = { uri, bytes: data.length };
+      }
+    });
+
+    assert.equal(uriCall.uri, printer.uri);
+    assert.equal(uriCall.bytes, result.payloadLength);
+    assert.equal(warnings.some((w) => /paper near end/.test(w)), true);
+  } finally {
+    await printer.close();
+  }
+});
+
+test("main --check-status rejects non-tcp targets before printing", async () => {
+  const deps = {
+    platform: () => "linux",
+    listPrinters: async () => ["EPSON"],
+    printRaw: async () => {
+      throw new Error("must not print");
+    },
+    printRawToPrinterUri: async () => {
+      throw new Error("must not print");
+    },
+    getPrinterStatus: async () => {
+      throw new Error("must not query");
+    }
+  };
+
+  await assert.rejects(
+    () => main(["--markdown=# hi", "--check-status", "--printer=EPSON"], deps),
+    /status is only supported for tcp:\/\/ printer URIs/
+  );
+  await assert.rejects(
+    () => main(["--markdown=# hi", "--check-status", "--printer-uri=ipp://taiga.local:631/printers/TM-T88V"], deps),
+    /status is only supported for tcp:\/\/ printer URIs/
+  );
+});
+
+test("main --check-status is skipped in dry-run", async () => {
+  const result = await main(["--markdown=# hi", "--check-status", "--dry-run"], {
+    getPrinterStatus: async () => {
+      throw new Error("must not query");
+    }
+  });
+  assert.equal(result.dryRun, true);
+});

@@ -94,5 +94,6 @@ async function printRawToTcpPrinter(
 
 module.exports = {
   DEFAULT_TCP_TIMEOUT_MS,
+  formatEndpoint,
   printRawToTcpPrinter
 };

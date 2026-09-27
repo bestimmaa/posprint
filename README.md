@@ -18,6 +18,7 @@
 - Build receipt payloads from markdown
 - Dry-run output before sending a real print job
 - Print to a local printer queue, a direct IPP/IPPS printer URI, or a network printer over raw TCP (`tcp://`, port 9100)
+- Query a network printer's real-time status (cover open, paper end/near end, cutter errors) over `tcp://`
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
 
 ## Install
@@ -66,6 +67,13 @@ Print straight to a network printer over raw TCP (JetDirect/AppSocket), no CUPS 
 posprint --markdown-file="./receipt.md" --printer-uri="tcp://192.168.1.50:9100"
 ```
 
+Check a network printer's status (cover, paper, errors) before printing:
+
+```bash
+posprint --status --printer-uri="tcp://192.168.1.50"
+# Status: OK (tcp://192.168.1.50:9100)
+```
+
 ## CLI
 
 ```text
@@ -79,6 +87,8 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
+- `--status` query the real-time status of a `tcp://` printer and exit, without markdown input. Exit code `0` = OK, `2` = printer reports a problem (cover open, paper end, cutter or other error, offline), `1` = error (for example no answer or a non-`tcp://` target)
+- `--check-status` before printing to a `tcp://` printer, query its status and abort without printing if it is not OK
 - `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
@@ -94,6 +104,21 @@ Common options:
 `http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning.
 
 `tcp://` URIs take only a host and optional port (no path) and work on Windows, Linux, and macOS. Most network ESC/POS printers, including the TM-T88V with an Ethernet interface, accept raw jobs on port `9100`. The connection times out after 10 seconds without progress, and the error names the `host:port`.
+
+`--status` and `--check-status` send the ESC/POS real-time status queries `DLE EOT 1`–`4` over the same raw TCP connection and need a `tcp://` printer URI. Local queues (`--printer`), IPP, CUPS, and the Windows spooler don't give bidirectional raw access, so they are rejected with `Printer status is only supported for tcp:// printer URIs`. Example reports:
+
+```text
+Status: OK (tcp://192.168.1.50:9100)
+Warning: paper near end
+Raw DLE EOT 1-4: 0x12 0x12 0x12 0x1e
+```
+
+```text
+Status: PROBLEM — cover open (tcp://192.168.1.50:9100)
+Raw DLE EOT 1-4: 0x1a 0x16 0x12 0x12
+```
+
+Paper near-end is a warning and keeps the status OK. If the printer does not answer within 5 seconds, posprint fails with `Printer did not answer status query ... for host:port`.
 
 Printer selection order:
 
