@@ -1028,7 +1028,9 @@ function markdownToEscposDetailed(markdown, options = {}) {
             `${quotePrefix}${getListIndent(listItemDepth)}  `,
             replacements
           );
-          chunks.push(line(""));
+          if (!token.hidden) {
+            chunks.push(line(""));
+          }
           i += 2;
           continue;
         }
@@ -1042,7 +1044,9 @@ function markdownToEscposDetailed(markdown, options = {}) {
 
           const hanging = `${indent}${" ".repeat(marker.length)}`;
           renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, hanging, replacements, firstPrefix);
-          chunks.push(line(""));
+          if (!token.hidden) {
+            chunks.push(line(""));
+          }
           i += 2;
           continue;
         }
@@ -1057,7 +1061,9 @@ function markdownToEscposDetailed(markdown, options = {}) {
         }
 
         renderWrappedSegments(segments, chunks, charsPerLine, selectedCodePage.name, quotePrefix, replacements);
-        chunks.push(line(""));
+        if (!token.hidden) {
+          chunks.push(line(""));
+        }
         i += 2;
         continue;
       }
@@ -1092,7 +1098,11 @@ function markdownToEscposDetailed(markdown, options = {}) {
 
     if (token.type === "bullet_list_close" || token.type === "ordered_list_close") {
       listStack.pop();
-      chunks.push(line(""));
+      // Tight list items print back to back; one blank line closes the outermost list.
+      const endedWithBlankLine = tokens[i - 2] && tokens[i - 2].type === "paragraph_close" && !tokens[i - 2].hidden;
+      if (listStack.length === 0 && !endedWithBlankLine) {
+        chunks.push(line(""));
+      }
       continue;
     }
 

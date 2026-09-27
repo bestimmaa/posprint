@@ -601,6 +601,23 @@ test("ordered list items are not duplicated", () => {
   assert.equal((text.match(/Filter Coffee/g) || []).length, 1);
 });
 
+test("prints tight list items back to back and keeps blank lines in loose lists", () => {
+  const linesOf = (markdown) => Buffer.from(markdownToEscpos(markdown, { charsPerLine: 42 })).toString("utf8").split("\n");
+
+  const tight = linesOf("- Tea\n- Cake\n  - Slice\n- Coffee\n\nAfter\n");
+  const tea = tight.findIndex((line) => line.includes("- Tea"));
+  assert.match(tight[tea + 1], /- Cake/);
+  assert.match(tight[tea + 2], /- Slice/);
+  assert.match(tight[tea + 3], /- Coffee/);
+  assert.equal(tight[tea + 4].replace(/[^\x20-\x7e]/g, "").trim(), "");
+  assert.match(tight[tea + 5], /After/);
+
+  const loose = linesOf("- Tea\n\n- Cake\n");
+  const looseTea = loose.findIndex((line) => line.includes("- Tea"));
+  assert.equal(loose[looseTea + 1].replace(/[^\x20-\x7e]/g, "").trim(), "");
+  assert.match(loose[looseTea + 2], /- Cake/);
+});
+
 test("retains multi-paragraph content within a list item", () => {
   const markdown = "- First paragraph in item\n\n  Second paragraph in same item\n";
   const out = Buffer.from(markdownToEscpos(markdown, {
