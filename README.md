@@ -54,6 +54,13 @@ Print to a local queue:
 posprint --markdown="# Hello\n\n- Espresso\n- Croissant" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
+Pipe markdown via stdin (read when neither `--markdown-file` nor `--markdown` is given):
+
+```bash
+cat receipt.md | posprint --printer="EPSON TM-T88V Receipt (USB)"
+./generate-receipt | posprint --dry-run
+```
+
 Print to a printer URI:
 
 ```bash
@@ -68,7 +75,7 @@ posprint [options]
 
 Common options:
 
-- `--markdown-file=<path>` read receipt content from a markdown file
+- `--markdown-file=<path>` read receipt content from a markdown file; `--markdown-file=-` reads from stdin
 - `--markdown="..."` pass markdown inline as a single argument
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI. This takes precedence over `--printer`.
