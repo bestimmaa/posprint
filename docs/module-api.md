@@ -26,6 +26,15 @@ Other unsupported characters become `?`.
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
 
+## Table Rendering
+
+GFM tables print as monospace columns fitted to `charsPerLine`:
+
+- bold header row, then a dash separator
+- column alignment follows the separator row (`:---`, `:---:`, `---:`)
+- when the table is too wide, the widest columns shrink and cell text wraps inside its column; if the columns cannot fit at all, each row prints as wrapped `a | b | c` text
+- inline formatting inside cells prints as plain text
+
 ## CommonJS Local Queue
 
 Convert markdown to ESC/POS bytes and print to a selected local queue:

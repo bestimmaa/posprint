@@ -54,6 +54,13 @@ Print to a local queue:
 posprint --markdown="# Hello\n\n- Espresso\n- Croissant" --printer="EPSON TM-T88V Receipt (USB)"
 ```
 
+Pipe markdown via stdin (read when neither `--markdown-file` nor `--markdown` is given):
+
+```bash
+cat receipt.md | posprint --printer="EPSON TM-T88V Receipt (USB)"
+./generate-receipt | posprint --dry-run
+```
+
 Print to a printer URI:
 
 ```bash
@@ -74,7 +81,7 @@ posprint [options]
 
 Common options:
 
-- `--markdown-file=<path>` read receipt content from a markdown file
+- `--markdown-file=<path>` read receipt content from a markdown file; `--markdown-file=-` reads from stdin
 - `--markdown="..."` pass markdown inline as a single argument
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
@@ -142,6 +149,7 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 ## Features
 
 - Inline markdown styling with bold, emphasis, and readable strikethrough handling
+- GFM tables rendered as aligned monospace columns fitted to `charsPerLine` (see [Module API guide](https://github.com/bestimmaa/posprint/blob/main/docs/module-api.md#table-rendering))
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
