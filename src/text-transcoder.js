@@ -59,6 +59,13 @@ function createCodePage(name, escposId, upperHalf) {
   return {
     name,
     escposId,
+    decodeByte(value) {
+      if (value <= 0x7f) {
+        return String.fromCharCode(value);
+      }
+
+      return upperHalf[value - 0x80] ?? "?";
+    },
     encodeChar(char) {
       const cp = char.codePointAt(0);
       if (cp <= 0x7f) {
@@ -139,6 +146,21 @@ function resolveCodePage(name = "cp858") {
   return page;
 }
 
+function resolveCodePageById(escposId) {
+  return Object.values(CODE_PAGES).find((page) => page.escposId === escposId) || null;
+}
+
+function decodeText(bytes, { codePage = "cp858" } = {}) {
+  const page = resolveCodePage(codePage);
+  let out = "";
+
+  for (const value of bytes || []) {
+    out += page.decodeByte(value);
+  }
+
+  return out;
+}
+
 function getSupportedCodePages() {
   return Object.values(CODE_PAGES).map(({ name, escposId }) => ({ name, escposId }));
 }
@@ -149,7 +171,9 @@ function encodeText(input, options) {
 
 const exported = {
   resolveCodePage,
+  resolveCodePageById,
   getSupportedCodePages,
+  decodeText,
   encodeText,
   encodeTextDetailed: encodeTextWithMetadata
 };

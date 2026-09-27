@@ -17,6 +17,7 @@
 
 - Build receipt payloads from markdown
 - Dry-run output before sending a real print job
+- Preview the receipt layout as text without spending paper
 - Print to a local printer queue or direct IPP/IPPS printer URI
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
 
@@ -48,6 +49,12 @@ Dry run inline markdown without contacting a printer:
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant"
 ```
 
+Preview the approximate receipt layout in the terminal without printing:
+
+```bash
+posprint --preview --markdown="# Hello\n\n- Espresso\n- Croissant"
+```
+
 Print to a local queue:
 
 ```bash
@@ -73,6 +80,7 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI. This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
+- `--preview` print a framed plain-text preview of the ESC/POS payload to stdout (implies `--dry-run`)
 - `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
@@ -138,6 +146,7 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
 - Unicode-to-code-page conversion with `cp858` as the default
+- Text preview (`--preview` / `previewEscpos`) that decodes the actual ESC/POS bytes: alignment, double-width text, code page characters, and placeholders for images, QR codes, drawer pulses, and cuts
 
 Show supported code pages:
 
