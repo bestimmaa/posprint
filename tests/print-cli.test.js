@@ -464,15 +464,43 @@ test("validatePrinterUri upgrades https and warns using CLI warning format", () 
 test("validatePrinterUri remaps invalid URI to CLI message", () => {
   assert.throws(
     () => validatePrinterUri("not a uri"),
-    /Invalid --printer-uri value\. Use ipp:\/\/host:port\/printers\/queue\./
+    /Invalid --printer-uri value\. Use ipp:\/\/host:port\/printers\/queue or tcp:\/\/host\[:port\]\./
   );
 });
 
 test("validatePrinterUri rejects unsupported schemes", () => {
   assert.throws(
     () => validatePrinterUri("ftp://taiga.local/printers/TM-T88V"),
-    /Unsupported --printer-uri scheme\. Use ipp:\/\/ or ipps:\/\//
+    /Unsupported --printer-uri scheme\. Use ipp:\/\/, ipps:\/\/, or tcp:\/\//
   );
+});
+
+test("validatePrinterUri normalizes tcp URIs and remaps malformed ones to CLI message", () => {
+  const warnings = [];
+  assert.equal(validatePrinterUri("tcp://printer.local", { warn: (m) => warnings.push(m) }), "tcp://printer.local:9100");
+  assert.deepEqual(warnings, []);
+
+  for (const uri of ["tcp://printer.local:99999", "tcp://printer.local:0", "tcp://printer.local:9100/printers/queue"]) {
+    assert.throws(() => validatePrinterUri(uri), /Invalid --printer-uri value\. .*tcp:\/\/host\[:port\]/, uri);
+  }
+});
+
+test("main prints via tcp printer-uri and skips listPrinters", async () => {
+  let uriCall = null;
+
+  const result = await main(["--markdown=# hi", "--printer-uri=tcp://192.168.1.50"], {
+    platform: () => "linux",
+    listPrinters: async () => {
+      throw new Error("should not list printers when --printer-uri is set");
+    },
+    printRawToPrinterUri: async (uri, data) => {
+      uriCall = { uri, bytes: data.length };
+    }
+  });
+
+  assert.equal(result.printerUri, "tcp://192.168.1.50:9100");
+  assert.equal(uriCall.uri, "tcp://192.168.1.50:9100");
+  assert.equal(uriCall.bytes, result.payloadLength);
 });
 
 test("main prints via printer-uri on win32 and skips listPrinters", async () => {

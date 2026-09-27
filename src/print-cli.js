@@ -19,7 +19,8 @@ function formatHelp() {
     "  --markdown-file=<path>   Read markdown from file (use - for stdin)",
     "  --markdown=<text>        Read markdown inline",
     "  --printer=<name>         Select printer",
-    "  --printer-uri=<uri>      Print directly to IPP/IPPS URI (ipp://...)",
+    "  --printer-uri=<uri>      Print directly to an IPP/IPPS URI (ipp://host:631/printers/queue)",
+    "                           or raw TCP/JetDirect (tcp://host[:port], default port 9100)",
     "  --chars-per-line=<n>     Wrap width (default: 42)",
     "  --font=A|B|C             Select ESC/POS font",
     "  --character-spacing-mm=<n>  Character spacing in mm (>= 0)",
@@ -74,11 +75,11 @@ function validatePrinterUri(printerUri, { warn = (message) => console.warn(messa
     return normalizedUri;
   } catch (error) {
     if (error && error.code === PRINTER_URI_ERROR_CODES.INVALID_URI) {
-      throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue.");
+      throw new Error("Invalid --printer-uri value. Use ipp://host:port/printers/queue or tcp://host[:port].");
     }
 
     if (error && error.code === PRINTER_URI_ERROR_CODES.UNSUPPORTED_SCHEME) {
-      throw new Error("Unsupported --printer-uri scheme. Use ipp:// or ipps://.");
+      throw new Error("Unsupported --printer-uri scheme. Use ipp://, ipps://, or tcp://.");
     }
 
     throw error;
