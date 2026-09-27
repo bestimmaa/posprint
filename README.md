@@ -134,7 +134,7 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 ## Features
 
 - Inline markdown styling with bold, emphasis, and readable strikethrough handling
-- GFM tables rendered as monospace columns fitted to `charsPerLine`, with a bold header, a dash separator, `:---` / `:---:` / `---:` column alignment, and in-column wrapping for wide cells (cell text is printed plain)
+- GFM tables rendered as aligned monospace columns fitted to `charsPerLine` (see [Module API guide](https://github.com/bestimmaa/posprint/blob/main/docs/module-api.md#table-rendering))
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
 - Layout controls for font, character spacing, line spacing, left margin, and print area width

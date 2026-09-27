@@ -28,16 +28,12 @@ Other unsupported characters become `?`.
 
 ## Table Rendering
 
-GFM tables are rendered as monospace text columns fitted to `charsPerLine`:
+GFM tables print as monospace columns fitted to `charsPerLine`:
 
-- the header row prints in bold, followed by a dash separator across the table width
-- column alignment follows the separator row (`:---` left, `:---:` center, `---:` right)
-- columns are sized to content; when the table is too wide, the widest columns shrink and cell text wraps inside its column
-- inline formatting inside cells is printed as plain text
-
-```js
-const escpos = markdownToEscpos("| Item | Price |\n|---|---:|\n| Espresso | 2.50 |", { charsPerLine: 42 });
-```
+- bold header row, then a dash separator
+- column alignment follows the separator row (`:---`, `:---:`, `---:`)
+- when the table is too wide, the widest columns shrink and cell text wraps inside its column; if the columns cannot fit at all, each row prints as wrapped `a | b | c` text
+- inline formatting inside cells prints as plain text
 
 ## CommonJS Local Queue
 

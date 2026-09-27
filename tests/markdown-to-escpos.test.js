@@ -661,15 +661,6 @@ function escposTextLines(bytes) {
     .split("\n");
 }
 
-test("renders GFM table text instead of silently dropping it", () => {
-  const md = "| Item | Price |\n|---|---:|\n| Espresso | 2.50 |";
-  const text = Buffer.from(markdownToEscpos(md, { charsPerLine: 42, strictMarkdown: true })).toString("latin1");
-  assert.equal(text.includes("Item"), true);
-  assert.equal(text.includes("Price"), true);
-  assert.equal(text.includes("Espresso"), true);
-  assert.equal(text.includes("2.50"), true);
-});
-
 test("renders table header in bold followed by a dash separator across the table width", () => {
   const md = "| Item | Price |\n|---|---:|\n| Espresso | 2.50 |";
   const out = Buffer.from(markdownToEscpos(md, { charsPerLine: 42 }));
@@ -725,4 +716,26 @@ test("table fixture renders right-aligned prices fitted to charsPerLine", () => 
   assert.equal(total, "Total                                12.00");
   assert.equal(lines.includes("powdered sugar"), true);
   assert.equal(lines.every((value) => value.replace(/[\x00-\x1f]/g, "").length <= 42), true);
+});
+
+test("renders the list marker before a table that starts a list item", () => {
+  const md = "- | a | b |\n  |---|---|\n  | 1 | 2 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 42 }));
+  const markerIndex = lines.findIndex((value) => value.endsWith("- "));
+  assert.notEqual(markerIndex, -1);
+  assert.deepEqual(lines.slice(markerIndex + 1, markerIndex + 4), ["  a  b", "  ----", "  1  2"]);
+});
+
+test("keeps table columns aligned when a cell contains a non-BMP character", () => {
+  const md = "| a | b |\n|---|--:|\n| \u{1F600} x | 1 |\n| e | 2 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 42 }));
+  assert.equal(lines.includes("? x   1"), true);
+  assert.equal(lines.includes("e     2"), true);
+});
+
+test("prints table cells inline when columns cannot fit charsPerLine", () => {
+  const md = "| a | b | c | d | e |\n|---|---|---|---|---|\n| 1 | 2 | 3 | 4 | 5 |";
+  const lines = escposTextLines(markdownToEscpos(md, { charsPerLine: 8 }));
+  const bodyStart = lines.indexOf("-".repeat(8)) + 1;
+  assert.deepEqual(lines.slice(bodyStart, bodyStart + 3), ["1 | 2 |", "3 | 4 |", "5"]);
 });

@@ -698,168 +698,72 @@ function renderCodeBlock(text, chunks, charsPerLine, codePageName, replacements 
   chunks.push(encodedLine("", codePageName, replacements));
 }
 
-const TABLE_ALIGNMENTS = new Set(["left", "center", "right"]);
-
-function parseCellAlignment(token) {
-  const style = String((token && typeof token.attrGet === "function" && token.attrGet("style")) || "");
-  const match = /text-align\s*:\s*(left|center|right)/i.exec(style);
-  const value = match ? match[1].toLowerCase() : "left";
-  return TABLE_ALIGNMENTS.has(value) ? value : "left";
-}
-
 function collectTableRows(tokens, startIndex, strictMarkdown) {
   const rows = [];
-  let currentRow = null;
-  let inHeader = false;
-  let endIndex = startIndex;
+  let i = startIndex + 1;
 
-  for (let i = startIndex + 1; i < tokens.length; i += 1) {
+  for (; i < tokens.length && tokens[i].type !== "table_close"; i += 1) {
     const token = tokens[i];
-    endIndex = i;
-
-    if (token.type === "table_close") {
-      break;
-    }
-
-    if (token.type === "thead_open") {
-      inHeader = true;
-      continue;
-    }
-
-    if (token.type === "thead_close") {
-      inHeader = false;
-      continue;
-    }
 
     if (token.type === "tr_open") {
-      currentRow = { header: inHeader, cells: [] };
-      continue;
-    }
-
-    if (token.type === "tr_close") {
-      if (currentRow) {
-        rows.push(currentRow);
-      }
-      currentRow = null;
-      continue;
-    }
-
-    if ((token.type === "th_open" || token.type === "td_open") && currentRow) {
-      const inline = tokens[i + 1];
-      const children = inline && inline.type === "inline" ? inline.children : [];
-      const text = inlineToText(children, strictMarkdown).replace(/\s+/g, " ").trim();
-      currentRow.cells.push({ text, align: parseCellAlignment(token) });
+      rows.push([]);
+    } else if (token.type === "th_open" || token.type === "td_open") {
+      const alignMatch = /text-align:\s*(left|center|right)/.exec(token.attrGet("style") || "");
+      rows[rows.length - 1].push({
+        text: inlineToText(tokens[i + 1].children, strictMarkdown).replace(/\s+/g, " ").trim(),
+        align: alignMatch ? alignMatch[1] : "left"
+      });
     }
   }
 
-  return { rows, endIndex };
+  return { rows, endIndex: i };
 }
 
-function fitTableColumnWidths(naturalWidths, available) {
-  const widths = naturalWidths.map((value) => Math.max(1, value));
-  let total = widths.reduce((sum, value) => sum + value, 0);
-
-  while (total > available) {
-    let widest = 0;
-    for (let col = 1; col < widths.length; col += 1) {
-      if (widths[col] > widths[widest]) {
-        widest = col;
-      }
-    }
-
-    if (widths[widest] <= 1) {
-      break;
-    }
-
-    widths[widest] -= 1;
-    total -= 1;
-  }
-
-  return widths;
+function padTableCell(text, width, alignment) {
+  // Pad by code points: each one encodes to a single printer byte.
+  const room = Math.max(0, width - Array.from(text).length);
+  const left = alignment === "right" ? room : alignment === "center" ? Math.floor(room / 2) : 0;
+  return " ".repeat(left) + text + " ".repeat(room - left);
 }
 
-function padTableCell(value, width, alignment) {
-  const text = String(value || "");
-  const room = Math.max(0, width - text.length);
-
-  if (alignment === "right") {
-    return " ".repeat(room) + text;
-  }
-
-  if (alignment === "center") {
-    const left = Math.floor(room / 2);
-    return " ".repeat(left) + text + " ".repeat(room - left);
-  }
-
-  return text + " ".repeat(room);
-}
-
-function layoutTable(rows, charsPerLine) {
-  const columnCount = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
-  if (!columnCount) {
-    return null;
-  }
-
-  const alignments = [];
-  const naturalWidths = [];
-
-  for (let col = 0; col < columnCount; col += 1) {
-    const headerCell = rows.find((row) => row.header && row.cells[col]);
-    const anyCell = rows.find((row) => row.cells[col]);
-    const source = headerCell || anyCell;
-    alignments.push(source ? source.cells[col].align : "left");
-    naturalWidths.push(rows.reduce((max, row) => Math.max(max, row.cells[col] ? row.cells[col].text.length : 0), 0));
-  }
-
-  const safeWidth = Number.isInteger(charsPerLine) && charsPerLine > 0 ? charsPerLine : 42;
-  const naturalTotal = naturalWidths.reduce((sum, value) => sum + Math.max(1, value), 0);
-  const gap = naturalTotal + (columnCount - 1) * 2 <= safeWidth ? 2 : 1;
-  const available = Math.max(columnCount, safeWidth - (columnCount - 1) * gap);
-  const widths = fitTableColumnWidths(naturalWidths, available);
-  const separator = " ".repeat(gap);
-  const tableWidth = widths.reduce((sum, value) => sum + value, 0) + (columnCount - 1) * gap;
-
-  const renderedRows = rows.map((row) => {
-    const cellLines = widths.map((width, col) => wrapText(row.cells[col] ? row.cells[col].text : "", width));
-    const height = cellLines.reduce((max, cellLinesForCol) => Math.max(max, cellLinesForCol.length), 1);
-    const lines = [];
-
-    for (let lineIndex = 0; lineIndex < height; lineIndex += 1) {
-      const parts = widths.map((width, col) => padTableCell(cellLines[col][lineIndex] || "", width, alignments[col]));
-      lines.push(parts.join(separator).replace(/\s+$/, ""));
-    }
-
-    return { header: row.header, lines };
-  });
-
-  return { widths, alignments, gap, tableWidth, rows: renderedRows };
-}
-
-function renderTable(tokens, startIndex, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null) {
-  const safePrefix = String(prefix || "");
+function renderTable(tokens, startIndex, chunks, charsPerLine, strictMarkdown, codePageName, prefix, replacements) {
   const { rows, endIndex } = collectTableRows(tokens, startIndex, strictMarkdown);
-  const layout = layoutTable(rows, Math.max(1, charsPerLine - safePrefix.length));
+  const header = rows[0];
+  const width = Math.max(1, charsPerLine - prefix.length);
+  const widths = header.map((_, col) => Math.max(1, ...rows.map((row) => row[col].text.length)));
+  const tableWidth = (gap) => widths.reduce((sum, value) => sum + value, 0) + (widths.length - 1) * gap;
+  const gap = tableWidth(2) <= width ? 2 : 1;
+  // Columns fit when each keeps at least one character; otherwise cells print inline.
+  const fits = widths.length * 2 - 1 <= width;
 
-  if (!layout) {
-    return endIndex;
+  while (fits && tableWidth(gap) > width) {
+    widths[widths.indexOf(Math.max(...widths))] -= 1;
   }
 
-  let separatorRendered = false;
-
-  for (const row of layout.rows) {
-    if (!row.header && !separatorRendered && layout.rows.some((candidate) => candidate.header)) {
-      chunks.push(encodedLine(`${safePrefix}${"-".repeat(layout.tableWidth)}`, codePageName, replacements));
-      separatorRendered = true;
+  const rowLines = (row) => {
+    if (!fits) {
+      return wrapText(row.map((cell) => cell.text).join(" | "), width);
     }
 
-    for (const value of row.lines) {
-      renderStyledLine([{ text: value, bold: row.header, italic: false }], chunks, codePageName, safePrefix, replacements);
-    }
-  }
+    const cellLines = row.map((cell, col) => wrapText(cell.text, widths[col]));
+    const height = Math.max(...cellLines.map((lines) => lines.length));
+    return Array.from({ length: height }, (_, lineIndex) =>
+      cellLines
+        .map((lines, col) => padTableCell(lines[lineIndex] || "", widths[col], header[col].align))
+        .join(" ".repeat(gap))
+        .trimEnd()
+    );
+  };
 
-  if (!separatorRendered && layout.rows.some((candidate) => candidate.header)) {
-    chunks.push(encodedLine(`${safePrefix}${"-".repeat(layout.tableWidth)}`, codePageName, replacements));
-  }
+  rows.forEach((row, rowIndex) => {
+    for (const value of rowLines(row)) {
+      renderStyledLine([{ text: value, bold: rowIndex === 0, italic: false }], chunks, codePageName, prefix, replacements);
+    }
+
+    if (rowIndex === 0) {
+      chunks.push(encodedLine(`${prefix}${"-".repeat(fits ? tableWidth(gap) : width)}`, codePageName, replacements));
+    }
+  });
 
   chunks.push(encodedLine("", codePageName, replacements));
   return endIndex;
@@ -956,6 +860,15 @@ function markdownToEscposDetailed(markdown, options = {}) {
   let listItemDepth = 0;
   let blockquoteDepth = 0;
 
+  const renderPendingListMarker = () => {
+    const currentListItem = listItemStack[listItemStack.length - 1];
+    if (listItemDepth > 0 && currentListItem && !currentListItem.hasRenderedContent) {
+      const quotePrefix = blockquoteDepth > 0 ? "| " : "";
+      chunks.push(line(`${quotePrefix}${getListIndent(listItemDepth)}${currentListItem.marker} `));
+      currentListItem.hasRenderedContent = true;
+    }
+  };
+
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i];
 
@@ -1031,29 +944,13 @@ function markdownToEscposDetailed(markdown, options = {}) {
     }
 
     if (token.type === "bullet_list_open") {
-      if (listItemDepth > 0) {
-        const currentListItem = listItemStack[listItemStack.length - 1];
-        if (currentListItem && !currentListItem.hasRenderedContent) {
-          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          const indent = getListIndent(listItemDepth);
-          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
-          currentListItem.hasRenderedContent = true;
-        }
-      }
+      renderPendingListMarker();
       listStack.push({ ordered: false, index: 0 });
       continue;
     }
 
     if (token.type === "ordered_list_open") {
-      if (listItemDepth > 0) {
-        const currentListItem = listItemStack[listItemStack.length - 1];
-        if (currentListItem && !currentListItem.hasRenderedContent) {
-          const quotePrefix = blockquoteDepth > 0 ? "| " : "";
-          const indent = getListIndent(listItemDepth);
-          chunks.push(line(`${quotePrefix}${indent}${currentListItem.marker} `));
-          currentListItem.hasRenderedContent = true;
-        }
-      }
+      renderPendingListMarker();
       listStack.push({ ordered: true, index: Number(token.attrGet("start") || 1) });
       continue;
     }
@@ -1083,6 +980,7 @@ function markdownToEscposDetailed(markdown, options = {}) {
     }
 
     if (token.type === "table_open") {
+      renderPendingListMarker();
       const quotePrefix = blockquoteDepth > 0 ? "| " : "";
       const listPrefix = listItemDepth > 0 ? `${getListIndent(listItemDepth)}  ` : "";
       i = renderTable(tokens, i, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, `${quotePrefix}${listPrefix}`, replacements);
@@ -1128,6 +1026,5 @@ module.exports = {
   renderListItem,
   renderRule,
   renderCodeBlock,
-  renderLink,
-  renderTable
+  renderLink
 };
