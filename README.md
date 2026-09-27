@@ -17,6 +17,7 @@
 
 - Build receipt payloads from markdown
 - Dry-run output before sending a real print job
+- Preview the receipt layout as text without spending paper
 - Print to a local printer queue, a direct IPP/IPPS printer URI, or a network printer over raw TCP (`tcp://`, port 9100)
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
 
@@ -46,6 +47,12 @@ Dry run inline markdown without contacting a printer:
 
 ```bash
 posprint --dry-run --markdown="# Hello\n\n- Espresso\n- Croissant"
+```
+
+Preview the approximate receipt layout in the terminal without printing:
+
+```bash
+posprint --preview --markdown="# Hello\n\n- Espresso\n- Croissant"
 ```
 
 Print to a local queue:
@@ -86,6 +93,7 @@ Common options:
 - `--printer="Printer Name"` target an exact local printer queue
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
+- `--preview` print a framed plain-text preview of the ESC/POS payload to stdout (implies `--dry-run`)
 - `--strict-markdown` reject unsupported constructs and invalid QR/row shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
@@ -155,6 +163,7 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 - Left/right receipt rows like `{{row:Espresso|2.50}}` or `{{row:Total|12.00|fill=.}}` (see [Receipt rows](#receipt-rows))
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
 - Unicode-to-code-page conversion with `cp858` as the default
+- Text preview (`--preview` / `previewEscpos`) that decodes the actual ESC/POS bytes: alignment, double-width text, code page characters, and placeholders for images, QR codes, drawer pulses, and cuts
 
 ### Receipt rows
 
