@@ -27,6 +27,23 @@ Other unsupported characters become `?`.
 - The CLI warns when fallback replacement occurs.
 - Module conversion stays silent by default.
 
+## Markdown Shortcodes
+
+`markdownToEscpos` understands these shortcodes inside paragraphs:
+
+- `{{qr:<payload>|size=<1-16>|ec=<L|M|Q|H>}}` prints a native QR code.
+- `{{row:<left>|<right>|fill=<char>}}` prints a left/right aligned receipt row exactly `charsPerLine` wide (`fill` optional, default space).
+
+```js
+const { markdownToEscpos } = require("@bestimmaa/posprint");
+
+const escpos = markdownToEscpos("{{row:Espresso|2.50}}\n{{row:Total|12.00|fill=.}}", { charsPerLine: 42 });
+// Espresso                              2.50
+// Total................................12.00
+```
+
+With `strictMarkdown: true`, invalid QR or row shortcodes throw; otherwise a warning is logged and the shortcode is printed literally. See the README's Receipt rows section for row layout rules.
+
 ## Table Rendering
 
 GFM tables print as monospace columns fitted to `charsPerLine`:

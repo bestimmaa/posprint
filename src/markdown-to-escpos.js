@@ -160,19 +160,22 @@ function parseQrShortcode(raw) {
   return { payload, size: options.size, ec: options.ec };
 }
 
-function scanTextForQrShortcodes(value) {
+function scanTextForShortcodes(value) {
   const textValue = String(value || "");
+  const opener = /\{\{(qr|row):/g;
   const out = [];
   let cursor = 0;
 
   while (cursor < textValue.length) {
-    const start = textValue.indexOf("{{qr:", cursor);
+    opener.lastIndex = cursor;
+    const match = opener.exec(textValue);
 
-    if (start === -1) {
+    if (!match) {
       out.push({ type: "text", value: textValue.slice(cursor) });
       break;
     }
 
+    const start = match.index;
     if (start > cursor) {
       out.push({ type: "text", value: textValue.slice(cursor, start) });
     }
@@ -183,11 +186,74 @@ function scanTextForQrShortcodes(value) {
       break;
     }
 
-    out.push({ type: "qr", raw: textValue.slice(start, end + 2) });
+    out.push({ type: match[1], raw: textValue.slice(start, end + 2) });
     cursor = end + 2;
   }
 
   return out;
+}
+
+function textWidth(value) {
+  return Array.from(String(value || "")).length;
+}
+
+function parseRowShortcode(raw) {
+  const parts = String(raw || "").slice(6, -2).split("|");
+
+  if (parts.length < 2) {
+    throw new Error("expected {{row:<left>|<right>}}");
+  }
+
+  const [left, right] = parts.splice(0, 2).map((part) => part.replace(/\s+/g, " ").trim());
+
+  if (!left && !right) {
+    throw new Error("left or right text is required");
+  }
+
+  let fill = " ";
+
+  for (const part of parts) {
+    const idx = part.indexOf("=");
+    if (idx <= 0 || part.slice(0, idx).trim() !== "fill") {
+      throw new Error(`unknown option: ${part}`);
+    }
+
+    const value = part.slice(idx + 1);
+    fill = textWidth(value) === 1 ? value : value.trim();
+    if (textWidth(fill) !== 1) {
+      throw new Error("fill must be exactly one character");
+    }
+  }
+
+  return { left, right, fill };
+}
+
+function layoutRow({ left, right, fill }, width) {
+  const rightWidth = textWidth(right);
+
+  if (rightWidth >= width) {
+    // Right text cannot share a line with a fill char: wrap it onto right-aligned lines of its own.
+    const rightLines = wrapText(right, width).map((value) => `${fill.repeat(width - textWidth(value))}${value}`);
+    return left ? [...wrapText(left, width), ...rightLines] : rightLines;
+  }
+
+  // Keep as many trailing words of the wrapped left text as fit beside the right text.
+  const available = width - rightWidth - 1;
+  const lines = wrapText(left, width);
+  const words = lines.pop().split(" ");
+  const tail = [];
+
+  while (words.length && textWidth([words[words.length - 1], ...tail].join(" ")) <= available) {
+    tail.unshift(words.pop());
+  }
+
+  if (words.length) {
+    lines.push(words.join(" "));
+  }
+
+  const lastLeft = tail.join(" ");
+  lines.push(`${lastLeft}${fill.repeat(width - textWidth(lastLeft) - rightWidth)}${right}`);
+  return lines;
 }
 
 function collectInlineRange(children, startIndex, openType, closeType) {
@@ -492,7 +558,7 @@ function renderStyledLine(lineSegments, chunks, codePageName, prefix = "", repla
   chunks.push(concat(parts));
 }
 
-function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "", replacements = null) {
+function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix = "", replacements = null, firstPrefix = null) {
   const safePrefix = String(prefix || "");
   const rowWidth = Math.max(1, charsPerLine - safePrefix.length);
   const rows = splitSegmentsByBreaks(segments);
@@ -501,7 +567,8 @@ function renderWrappedSegments(segments, chunks, charsPerLine, codePageName, pre
     const wrapped = splitSegmentsByWidth(row, rowWidth);
 
     for (const wrappedLine of wrapped) {
-      renderStyledLine(wrappedLine, chunks, codePageName, safePrefix, replacements);
+      renderStyledLine(wrappedLine, chunks, codePageName, firstPrefix ?? safePrefix, replacements);
+      firstPrefix = null;
     }
   }
 }
@@ -536,31 +603,66 @@ function renderParagraphInline(children, chunks, charsPerLine, strictMarkdown, c
   chunks.push(encodedLine("", codePageName, replacements));
 }
 
-function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null) {
-  const buffered = [];
-  const inlineChildren = Array.isArray(children) ? children : [];
+function trimSegmentsEdge(segments, atStart) {
+  const out = normalizeSegments(segments);
 
-  function flushBuffered() {
-    if (!buffered.length) {
-      return;
+  while (out.length) {
+    const index = atStart ? 0 : out.length - 1;
+    out[index].text = atStart ? out[index].text.trimStart() : out[index].text.trimEnd();
+    if (out[index].text) {
+      break;
     }
-    const segments = inlineToSegments(buffered, strictMarkdown);
-    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix, replacements);
-    buffered.length = 0;
+    out.splice(index, 1);
   }
 
-  function consumeSpanningQrShortcode(startIndex) {
+  return out;
+}
+
+function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, codePageName, prefix = "", replacements = null, firstPrefix = null) {
+  const buffered = [];
+  const inlineChildren = Array.isArray(children) ? children : [];
+  let afterRow = false;
+
+  function flushBuffered(beforeRow = false) {
+    let segments = inlineToSegments(buffered, strictMarkdown);
+    // Rows print on their own lines: drop breaks and spaces touching them.
+    if (afterRow) {
+      segments = trimSegmentsEdge(segments, true);
+    }
+    if (beforeRow) {
+      segments = trimSegmentsEdge(segments, false);
+    }
+    buffered.length = 0;
+    afterRow = false;
+    if (!segmentsToText(segments)) {
+      return;
+    }
+    renderWrappedSegments(segments, chunks, charsPerLine, codePageName, prefix, replacements, firstPrefix);
+    firstPrefix = null;
+  }
+
+  function renderRow(parsed) {
+    flushBuffered(true);
+    for (const value of layoutRow(parsed, Math.max(1, charsPerLine - textWidth(prefix)))) {
+      chunks.push(encodedLine(`${firstPrefix ?? prefix}${value}`, codePageName, replacements));
+      firstPrefix = null;
+    }
+    afterRow = true;
+  }
+
+  function consumeSpanningShortcode(startIndex) {
     const token = inlineChildren[startIndex];
     if (!token || (token.type !== "text" && token.type !== "code_inline")) {
       return null;
     }
 
     const value = String(token.content || "");
-    const start = value.indexOf("{{qr:");
+    const start = Math.max(value.lastIndexOf("{{qr:"), value.lastIndexOf("{{row:"));
     if (start === -1) {
       return null;
     }
 
+    const isRow = value.startsWith("{{row:", start);
     if (value.indexOf("}}", start + 5) !== -1) {
       return { content: value, endIndex: startIndex };
     }
@@ -578,6 +680,11 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
         if (combined.indexOf("}}", start + 5) !== -1) {
           return { content: combined, endIndex: index };
         }
+        continue;
+      }
+
+      if (isRow && /^(strong|em|s)_(open|close)$/.test(next.type)) {
+        // Row text is printed plain: drop inline emphasis markers.
         continue;
       }
 
@@ -612,18 +719,32 @@ function renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMa
     }
 
     if (token.type === "text" || token.type === "code_inline") {
-      const spanning = consumeSpanningQrShortcode(i);
+      const spanning = consumeSpanningShortcode(i);
       const source = spanning ? spanning.content : String(token.content || "");
       if (spanning) {
         i = spanning.endIndex;
       }
 
-      const parts = scanTextForQrShortcodes(source);
+      const parts = scanTextForShortcodes(source);
 
       for (const part of parts) {
         if (part.type === "text") {
           if (part.value) {
             buffered.push({ ...token, type: "text", content: part.value });
+          }
+          continue;
+        }
+
+        if (part.type === "row") {
+          try {
+            renderRow(parseRowShortcode(part.raw));
+          } catch (error) {
+            const message = `Invalid row shortcode "${part.raw}": ${error.message}`;
+            if (strictMarkdown) {
+              throw new Error(message);
+            }
+            console.warn(message);
+            buffered.push({ ...token, type: "text", content: part.raw });
           }
           continue;
         }
@@ -658,12 +779,12 @@ function childrenContainImage(children) {
   return Array.isArray(children) && children.some((token) => token.type === "image");
 }
 
-function childrenContainQrShortcode(children) {
+function childrenContainShortcode(children, opener) {
   return Array.isArray(children) && children.some((token) => {
     if (token.type !== "text" && token.type !== "code_inline") {
       return false;
     }
-    return String(token.content || "").includes("{{qr:");
+    return String(token.content || "").includes(opener);
   });
 }
 
@@ -889,7 +1010,7 @@ function markdownToEscposDetailed(markdown, options = {}) {
       if (listItemDepth > 0) {
         const currentListItem = listItemStack[listItemStack.length - 1];
         const hasImage = childrenContainImage(children);
-        const hasQrShortcode = childrenContainQrShortcode(children);
+        const hasQrShortcode = childrenContainShortcode(children, "{{qr:");
 
         if (hasImage || hasQrShortcode) {
           if (currentListItem && !currentListItem.hasRenderedContent) {
@@ -907,6 +1028,20 @@ function markdownToEscposDetailed(markdown, options = {}) {
             `${quotePrefix}${getListIndent(listItemDepth)}  `,
             replacements
           );
+          chunks.push(line(""));
+          i += 2;
+          continue;
+        }
+
+        if (currentListItem && childrenContainShortcode(children, "{{row:")) {
+          // Hanging indent: the marker leads the first line, later lines align under the item text.
+          const indent = `${quotePrefix}${getListIndent(listItemDepth)}`;
+          const marker = `${currentListItem.marker} `;
+          const firstPrefix = currentListItem.hasRenderedContent ? null : `${indent}${marker}`;
+          currentListItem.hasRenderedContent = true;
+
+          const hanging = `${indent}${" ".repeat(marker.length)}`;
+          renderInlineChildrenWithImages(children, chunks, charsPerLine, strictMarkdown, selectedCodePage.name, hanging, replacements, firstPrefix);
           chunks.push(line(""));
           i += 2;
           continue;

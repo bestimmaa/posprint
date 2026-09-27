@@ -94,7 +94,7 @@ Common options:
 - `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
 - `--preview` print a framed plain-text preview of the ESC/POS payload to stdout (implies `--dry-run`)
-- `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
+- `--strict-markdown` reject unsupported constructs and invalid QR/row shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
 - `--code-page=<name>` set ESC/POS code page, default `cp858`
 - `--font=A|B|C` select the ESC/POS font
@@ -160,9 +160,29 @@ For local queue printing, printer URI printing, available exports, and ESM inter
 - GFM tables rendered as aligned monospace columns fitted to `charsPerLine` (see [Module API guide](https://github.com/bestimmaa/posprint/blob/main/docs/module-api.md#table-rendering))
 - Markdown image support for `.png`, `.jpg`, and `.jpeg`
 - Native QR shortcode support like `{{qr:https://example.com|size=6|ec=M}}`
+- Left/right receipt rows like `{{row:Espresso|2.50}}` or `{{row:Total|12.00|fill=.}}` (see [Receipt rows](#receipt-rows))
 - Layout controls for font, character spacing, line spacing, left margin, and print area width
 - Unicode-to-code-page conversion with `cp858` as the default
 - Text preview (`--preview` / `previewEscpos`) that decodes the actual ESC/POS bytes: alignment, double-width text, code page characters, and placeholders for images, QR codes, drawer pulses, and cuts
+
+### Receipt rows
+
+Use `{{row:<left>|<right>[|fill=<char>]}}` to print a line with left text, fill characters, and right-aligned text spanning exactly `charsPerLine`:
+
+```markdown
+{{row:Espresso|2.50}}
+{{row:Total|12.00|fill=.}}
+```
+
+```text
+Espresso                              2.50
+Total................................12.00
+```
+
+- `fill` must be exactly one character (default: space); at least one fill character separates left and right.
+- Long left text wraps onto preceding lines; the right text stays right-aligned on the last line.
+- Rows respect list markers and blockquote prefixes. Inline emphasis prints as plain text; `|` cannot appear inside left or right text.
+- Invalid row shortcodes fail with `--strict-markdown`; otherwise a warning is printed and the shortcode is printed literally.
 
 Show supported code pages:
 
