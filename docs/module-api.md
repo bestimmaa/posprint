@@ -54,6 +54,13 @@ printReceipt().catch((error) => {
 
 ## CommonJS Printer URI
 
+`printRawToPrinterUri(printerUri, data)` accepts:
+
+- `ipp://host:port/printers/queue` or `ipps://...`, submitted as an IPP `Print-Job` with raw document format
+- `tcp://host[:port]`, where the bytes are written straight to the printer socket (JetDirect/AppSocket). The port defaults to `9100`. A path, query, or credentials are rejected. The call resolves after the payload is flushed and the connection closes. It rejects with `TCP connection failed for host:port: ...` on connection errors, or `TCP print timed out after 10000ms for host:port` when the connection or write makes no progress for 10 seconds.
+
+Both schemes work on Windows, Linux, and macOS. Invalid URIs throw an `Error` whose `code` is `INVALID_URI`, `UNSUPPORTED_SCHEME`, `UNSUPPORTED_PATH`, or `INVALID_PORT`.
+
 Print directly to an IPP/IPPS URI:
 
 ```js
@@ -67,6 +74,24 @@ async function printToUri() {
 }
 
 printToUri().catch((error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+```
+
+Print to a network printer over raw TCP:
+
+```js
+const { markdownToEscpos, printRawToPrinterUri } = require("@bestimmaa/posprint");
+
+async function printToNetworkPrinter() {
+  const escpos = markdownToEscpos("# Hello\n\n- Espresso", { charsPerLine: 42 });
+
+  // Same as tcp://192.168.1.50:9100
+  await printRawToPrinterUri("tcp://192.168.1.50", Buffer.from(escpos));
+}
+
+printToNetworkPrinter().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });

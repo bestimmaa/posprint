@@ -73,3 +73,27 @@ Get-Printer | Select-Object Name, PrinterStatus
 - Job disappears, nothing prints → queue is paused; check **Printers & scanners → Manage**.
 - Garbage characters print → the driver is re-encoding ESC/POS bytes; switch to Generic / Text Only.
 - USB port not found → unplug, replug, wait 5 s, re-run `Get-PrinterPort`.
+
+---
+
+## Network (Ethernet / Wi-Fi, any OS)
+
+Network ESC/POS printers (for example a TM-T88V with an Ethernet interface) accept raw jobs on TCP port 9100. posprint can send to them directly, with no CUPS queue, IPP, or Windows driver.
+
+**1. Find the printer's IP address.** Hold the feed button while powering on to print a status sheet, or check your router's DHCP leases. A DHCP reservation keeps the address stable.
+
+**2. Check the port is reachable:**
+```sh
+nc -vz 192.168.1.50 9100                            # macOS / Linux
+Test-NetConnection 192.168.1.50 -Port 9100         # Windows PowerShell
+```
+
+**posprint URI:**
+```
+tcp://192.168.1.50:9100
+```
+The port can be omitted (`tcp://192.168.1.50`) because it defaults to 9100.
+
+**Troubleshooting:**
+- `TCP connection failed ... ECONNREFUSED` → wrong port, or raw/port-9100 printing is disabled in the printer's network settings.
+- `TCP print timed out` → wrong IP address, printer offline, or a firewall is dropping traffic to port 9100.

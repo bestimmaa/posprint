@@ -17,7 +17,7 @@
 
 - Build receipt payloads from markdown
 - Dry-run output before sending a real print job
-- Print to a local printer queue or direct IPP/IPPS printer URI
+- Print to a local printer queue, a direct IPP/IPPS printer URI, or a network printer over raw TCP (`tcp://`, port 9100)
 - Support practical receipt features like inline emphasis, images, QR codes, layout controls, and code pages
 
 ## Install
@@ -60,6 +60,12 @@ Print to a printer URI:
 posprint --markdown-file="./receipt.md" --printer-uri="ipp://taiga.local:631/printers/TM-T88V"
 ```
 
+Print straight to a network printer over raw TCP (JetDirect/AppSocket), no CUPS or IPP setup needed:
+
+```bash
+posprint --markdown-file="./receipt.md" --printer-uri="tcp://192.168.1.50:9100"
+```
+
 ## CLI
 
 ```text
@@ -71,7 +77,7 @@ Common options:
 - `--markdown-file=<path>` read receipt content from a markdown file
 - `--markdown="..."` pass markdown inline as a single argument
 - `--printer="Printer Name"` target an exact local printer queue
-- `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI. This takes precedence over `--printer`.
+- `--printer-uri="ipp://host:631/printers/queue"` print directly to an IPP/IPPS printer URI, or `--printer-uri="tcp://host[:port]"` send raw bytes to a network printer over TCP (port defaults to `9100`). This takes precedence over `--printer`.
 - `--dry-run` build and inspect output without sending a print job
 - `--strict-markdown` reject unsupported constructs and invalid QR shortcodes
 - `--chars-per-line=<n>` set receipt width, default `42`
@@ -86,6 +92,8 @@ Common options:
 - `--version` show package version
 
 `http://.../printers/...` and `https://.../printers/...` inputs are normalized to `ipp://` / `ipps://` with a warning.
+
+`tcp://` URIs take only a host and optional port (no path) and work on Windows, Linux, and macOS. Most network ESC/POS printers, including the TM-T88V with an Ethernet interface, accept raw jobs on port `9100`. The connection times out after 10 seconds without progress, and the error names the `host:port`.
 
 Printer selection order:
 
